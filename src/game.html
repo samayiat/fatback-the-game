@@ -325,9 +325,27 @@ const $=id=>document.getElementById(id);   // hoisted: the shop + install code a
 
 //====================== shop ======================
 let shopOpen=false, shopB=null;
+// liquor store — booze by the pull. nip and beer+shot go straight down; jameson you carry.
+// one full bottle, drunk, is +18 drunk / +6 conf (see the drink state), so a fraction scales that.
+const LIQUOR={
+  nip:      {n:'NIP',               cost:4,  frac:.25, drink:true,
+             d:()=>`A quick pull — a quarter bottle, straight down. Drunk ${Math.round(P.drunk)}.`},
+  beershot: {n:'BEER & A SHOT',     cost:7,  frac:.5,  drink:true,
+             d:()=>`The workingman's special. Half a bottle's worth. Drunk ${Math.round(P.drunk)}.`},
+  jameson:  {n:'BOTTLE OF JAMESON', cost:12, frac:1,   drink:false,
+             d:()=>`Take it to go — press DRINK to pull from it. Carrying ${P.bottles}.`},
+};
 function renderShop(){
   $('shopCash').textContent='$'+P.money;
   const L=$('shopList'); let h='';
+  if(shopB && shopB.kind==='liquor'){
+    for(const k in LIQUOR){ const li=LIQUOR[k], can=P.money>=li.cost;
+      h+=`<div class="item ${can?'':'no'}" data-k="${k}">
+        <div class="nm">${li.n}</div>
+        <div class="ds">${li.d()}</div>
+        <div class="pr">$${li.cost}</div></div>`; }
+    L.innerHTML=h; return;
+  }
   const full = P.hp>=P.maxhp, canB = P.money>=burgerCost && !full;
   h+=`<div class="item ${canB?'':'no'}" data-k="burger">
     <div class="nm">BURGER</div>
@@ -345,6 +363,14 @@ function renderShop(){
   L.innerHTML=h;
 }
 function buy(k){
+  const li=LIQUOR[k];
+  if(li){
+    if(P.money<li.cost) return;
+    P.money-=li.cost;
+    if(li.drink){ P.drunk=Math.min(100,P.drunk+18*li.frac); P.conf=Math.min(100,P.conf+6*li.frac); }
+    else P.bottles++;                             // a bottle to carry, drunk later on DRINK
+    blip(li.drink?680:760,.06); rumble(200,.4,.7,true); renderShop(); return;
+  }
   if(k==='burger'){
     if(P.money<burgerCost||P.hp>=P.maxhp) return;
     P.money-=burgerCost; P.hp=P.maxhp; burgerCost+=12;
@@ -538,6 +564,14 @@ function genChunk(ci){
       CLUBS=BUILDINGS.filter(q=>q.kind==='club');
     }
   }
+  // most blocks get a liquor store — booze on the street, taken from a leftover storefront
+  if(hsh(ci*5.31+9.2)<0.62){
+    const shops=BUILDINGS.filter(b=>b.chunk===ci && b.kind==='shop');
+    if(shops.length){
+      const b=shops[Math.floor(R()*shops.length)];
+      b.kind='liquor'; b.hue='#ff5a2e'; b.name='LIQUOR';
+    }
+  }
   for(let i=0;i<3;i++) GRATES.push({x:x0+R()*CHUNK, z:FLOOR_N+32+R()*(FLOOR_S-FLOOR_N-44), open:0, chunk:ci});
   for(let i=0;i<7;i++) cans.push({x:x0+40+R()*(CHUNK-80), z:FLOOR_N+8+R()*(FLOOR_S-FLOOR_N-16),
     hp:3, shake:0, dead:false, chunk:ci});
@@ -714,8 +748,8 @@ function spawnWave(T){
 }
 
 //====================== combat ======================
-function atkBox(){ const s=cStep(); const reach = P.step===3?50:38;
-  return {x:P.x+P.face*(16+reach/2), z:P.z, rw:reach/2, rd:14}; }
+function atkBox(){ const s=cStep(); const reach = P.step===3?64:52;
+  return {x:P.x+P.face*(16+reach/2), z:P.z, rw:reach/2, rd:20}; }   // wide arc — the swing catches a crowd
 function hits(b,e){ return Math.abs(b.x-e.x)<b.rw+e.w && Math.abs(b.z-e.z)<b.rd+e.d; }
 
 function connect(e,s){
@@ -743,7 +777,8 @@ function connect(e,s){
     if(e.big){ shake=10; rumble(600,1,1,true); say(e.x,e.z-40,'DROPPED IT','#ff5a2e');
       for(let i=0;i<4;i++) drop(e.x+rnd(-20,20),e.z,'cash'); tooth(e.x,e.z); tooth(e.x,e.z); }
     if(e.k==='vamp'){ Math.random()<0.5?drop(e.x,e.z,'jameson'):drop(e.x,e.z,'cash');
-      if(e.elite){ drop(e.x+rnd(-10,10),e.z,'cash'); tooth(e.x,e.z); rumble(300,1,1,true); } } }
+      if(e.elite){ drop(e.x+rnd(-10,10),e.z,'cash'); tooth(e.x,e.z); rumble(300,1,1,true); } }
+    if(e.k!=='rat' && Math.random()<0.14) drop(e.x+rnd(-14,14),e.z,'burger'); }  // a meal off the body, now and then
   return crit;
 }
 
@@ -874,12 +909,18 @@ function update(){
     const active = P.st>s.su && P.st<=s.su+s.act;
     if(active && !P.hitDone){
       const b=atkBox();
+      const whiff = Math.random()<whiffChance();     // one roll per swing, not per body
+      let near=null, nd=1e9;
       for(const e of ents){ if(e.dead) continue;
         if(hits(b,e)){
-          if(Math.random()<whiffChance()){ say(e.x,e.z-4,'whiff','#5c5670'); blip(70,.03);
-            P.hitDone=true; P.connected=false; break; }
-          connect(e,s); P.hitDone=true; P.connected=true; break;
+          const d=Math.abs(e.x-P.x); if(d<nd){ nd=d; near=e; }
+          if(!whiff) connect(e,s);                   // no break: the arc harms everyone it overlaps
         } }
+      if(near){
+        if(whiff){ say(near.x,near.z-4,'whiff','#5c5670'); blip(70,.03); P.connected=false; }
+        else P.connected=true;
+        P.hitDone=true;
+      }
       // swing at a bystander and he stops being a bystander
       if(!P.hitDone) for(const cw of crowd){ if(cw.blob||cw.gone) continue;
         if(Math.abs(b.x-cw.x)<b.rw+13 && Math.abs(b.z-cw.z)<b.rd+9){
@@ -913,9 +954,9 @@ function update(){
   else if(P.state==='air'){                    // dive attack — the reason to press JUMP
     P.st++;
     P.x += P.face*2.3; 
-    if(!P.hitDone && P.y>6){ const b={x:P.x+P.face*20,z:P.z,rw:24,rd:16};
+    if(!P.hitDone && P.y>6){ const b={x:P.x+P.face*20,z:P.z,rw:30,rd:22};   // wider crash on the way down
       for(const e of ents){ if(e.dead)continue;
-        if(hits(b,e)){ connect(e,{name:'dive',dmg:12,push:6.5,stun:34,y:2.2,launch:true,rum:[240,.9,.5]}); P.hitDone=true; break; } } }
+        if(hits(b,e)){ connect(e,{name:'dive',dmg:12,push:6.5,stun:34,y:2.2,launch:true,rum:[240,.9,.5]}); P.hitDone=true; } } }
   }
   else {
     P.driftPh+=0.016;
@@ -1052,6 +1093,7 @@ function update(){
       if(d.kind==='cash'){ const m=Math.floor(rnd(5,18)); P.money+=m; say(d.x,d.z,'+$'+m,'#c9d13a'); }
       if(d.kind==='tooth'){ P.money+=5; say(d.x,d.z,'+$5','#e8e2d4'); }
       if(d.kind==='jameson'||d.kind==='bottle'){ P.bottles++; say(d.x,d.z,'+1 BOTTLE','#c9d13a'); }
+      if(d.kind==='burger'){ const heal=Math.round(P.maxhp*0.35); P.hp=Math.min(P.maxhp,P.hp+heal); say(d.x,d.z,'+'+heal+' HP','#ffb545'); blip(600,.05); }
       blip(520,.04); } }
   drops=drops.filter(d=>!d.gone);
 
@@ -1062,7 +1104,7 @@ function update(){
     else n.lie=0; }
   //---- the counter. TALK opens it, but only once the street's quiet.
   P.atShop=null;
-  for(const b of BUILDINGS){ if(b.kind!=='burger') continue;
+  for(const b of BUILDINGS){ if(b.kind!=='burger'&&b.kind!=='liquor') continue;
     if(Math.abs(b.doorX-P.x)<34 && P.z<FLOOR_N+34){ P.atShop=b; break; } }
   if(P.atShop && jTalk && P.y===0 && P.state!=='down'){
     if(ents.some(e=>!e.dead && Math.abs(e.x-P.x)<W*0.6)) say(P.x,P.z-24,'NOT WHILE THEY ON YOU','#ff2e88');
@@ -1528,7 +1570,12 @@ function drawDrop(d){ const sx=d.x-camX, y=d.z-d.y; shadow(d.x,d.z,5);
     ctx.fillStyle='#c9d13a'; ctx.fillRect(sx-3,y-8,6,4);
     ctx.fillStyle=u?'#ff2e88':'#2f7a3f'; ctx.fillRect(sx-1,y-17,2,4);
     if(d.kind==='bottle'){ ctx.fillStyle='#c9d13a'; ctx.font='7px monospace'; ctx.textAlign='center';
-      ctx.fillText(Math.ceil(d.life/60),sx,y-20); } } }
+      ctx.fillText(Math.ceil(d.life/60),sx,y-20); } }
+  if(d.kind==='burger'){ ctx.fillStyle='#e0a54a'; ctx.fillRect(sx-6,y-6,12,4);   // top bun
+    ctx.fillStyle='#7a3d12'; ctx.fillRect(sx-7,y-2,14,3);                          // patty
+    ctx.fillStyle='#6fbf3f'; ctx.fillRect(sx-7,y+1,14,1);                          // lettuce
+    ctx.fillStyle='#e0a54a'; ctx.fillRect(sx-6,y+2,12,3);                          // bottom bun
+    ctx.fillStyle='#fff2c8'; ctx.fillRect(sx-4,y-5,3,1); } }                       // sesame
 
 // the head crop, measured off hero.rot.south: cols 33-59, rows 23-48
 const PORT={sx:31,sy:22,w:30,h:28};
