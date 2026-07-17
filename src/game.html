@@ -107,6 +107,11 @@ input[type=range]{width:78px;accent-color:var(--club);height:14px}
 #a2hs{position:absolute;inset:0;background:rgba(4,3,8,.94);z-index:40;display:none;
   align-items:center;justify-content:center;padding:5%}
 #a2hs.on{display:flex}
+#notice{position:absolute;inset:0;background:rgba(4,3,8,.9);z-index:45;display:none;
+  align-items:center;justify-content:center;padding:6%}
+#notice.on{display:flex}
+#notice .sheet{max-width:340px;text-align:center;border:1px solid var(--club);background:#0e0c16;border-radius:6px;padding:22px}
+#notice p{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.09em;color:var(--bone);margin-bottom:16px;line-height:1.15}
 #a2hs .sheet{max-width:420px;border:1px solid #2f2b3d;background:#0e0c16;border-radius:6px;padding:18px}
 #a2hs h3{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.14em;color:var(--sodium);margin-bottom:10px}
 #a2hs p{font-size:10px;line-height:1.7;color:#9990ad;margin-bottom:14px;white-space:pre-line}
@@ -194,6 +199,12 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
           <h3>ADD TO HOME SCREEN</h3>
           <p id="a2hsBody"></p>
           <button class="mini" id="a2hsClose">GOT IT</button>
+        </div>
+      </div>
+      <div id="notice">
+        <div class="sheet">
+          <p id="noticeText"></p>
+          <button class="mini" id="noticeOk">GOT IT</button>
         </div>
       </div>
     </div>
@@ -407,6 +418,10 @@ $('o_topac').value=OPT.topac*100; applyTouchOpacity();
 
 let paused=false;
 function setPause(v){ paused=v; $('pause').classList.toggle('on',v); }
+// a one-shot, must-dismiss message (e.g. the death-tip). freezes the sim until acknowledged.
+let noticeOn=false;
+function showNotice(txt){ noticeOn=true; $('noticeText').textContent=txt; $('notice').classList.add('on'); }
+$('noticeOk').onclick=()=>{ noticeOn=false; $('notice').classList.remove('on'); };
 $('resume').onclick=()=>setPause(false);
 $('pauseBtn').onclick=()=>setPause(!paused);
 $('d_sober').onclick=()=>P.drunk=0;
@@ -613,6 +628,7 @@ function stream(){
 }
 let camX=0, camLock=null, t=0, shake=0, hitstop=0;
 let boss=null, bossDone=0;                 // the current boss entity, and the highest 250m threshold started
+let bossDeaths=0, bossNagged=false;        // deaths in the current boss fight, and whether we've shown the tip
 let dateOn=false, date=null;               // the rhythm date mini-game
 
 const P={};
@@ -625,7 +641,7 @@ function reset(){
   P.maxhp=100; P.conf=0;
 
   ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;
-  boss=null; bossDone=0; gauntlet=0; gauntletIx=0; dateOn=false; date=null; $('touch').classList.remove('dating');
+  boss=null; bossDone=0; bossDeaths=0; bossNagged=false; gauntlet=0; gauntletIx=0; dateOn=false; date=null; $('touch').classList.remove('dating');
   cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[]; props=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
   best=Math.max(best||0, 0);
@@ -815,7 +831,7 @@ function bossRepel(b){                              // "get away from me" — hu
   shake=13; hitstop=6; rumble(560,1,.85,true);
   puff(b.x+dir*b.w, b.z, b.h*0.4, 12, b.pal.glow);
   say(P.x,P.z-30,'GET OFF ME','#ff2e88'); say(P.x,P.z-46,'SOBERED','#3ad1ff'); blip(70,.14);
-  b.repelCd=44;
+  b.repelCd=300;   // 5s minimum between sobering repels — no more spamming you into oblivion
 }
 
 function genBoss(bn,forceArch){
@@ -845,7 +861,7 @@ function spawnBoss(bn,forceArch){
   b.x=clamp(camLock+W*0.72, camLock+60, camLock+W-60); b.z=FLOOR_N+34; b.face=-1;
   for(const e of ents) if(!e.dead){ e.dead=1; e.vx=(e.x<b.x?-1:1)*3; }   // the street clears — scatter any stragglers
   for(const cw of crowd) cw.joinT=0;                          // and nobody new joins in
-  boss=b; ents.push(b);
+  boss=b; ents.push(b); bossDeaths=0; bossNagged=false;       // fresh encounter, fresh death count
   for(const g of GATES) if(g.x<P.x && !g.done) g.done=true;   // no gate wave stacks onto/after the boss
   if(b.arch==='deli'){                       // he sends the sandwiches out first — beat them to reach him
     b.phase='guard';
@@ -1190,36 +1206,42 @@ function scammed(n,lost,lowc,verb){
   if(!n.scammer && lowc>0.5) say(P.x,P.z-38,'shoulda kept your head up','#5c5670');
 }
 
+const HIGH_TIER=8;   // at/above this apparent rating she's high-stakes: big reward or she plays you
+// charming a high-value woman pays off — flame powers + a real damage boost for a while
+function highReward(n){
+  P.conf=Math.min(100,P.conf+8);
+  P.fireT=780; P.dmgMul=Math.max(P.dmgMul,1.4); P.dmgT=600;
+  say(P.x,P.z-22,'FISTS OF FIRE','#ff5a2e'); say(P.x,P.z-36,'+DMG','#ffb545');
+  rumble(360,.8,.7,true); shake=4;
+}
 function resolveTalk(n){
   const app=Math.min(10,n.trueTier+goggles());
   n.talked=true; n.listening=false;
+  if(app < HIGH_TIER){                                  // low-key woman: easy, safe confidence. no risk, no boost.
+    const cg=Math.round(11+(HIGH_TIER-app)*1.5);        // lower rated → a touch more (up to ~19). always free.
+    P.conf=Math.min(100,P.conf+cg); say(n.x,n.z,'+'+cg+' CONF','#c9d13a'); rumble(200,.3,.6,true);
+    return;
+  }
+  // high-stakes woman — big reward or she plays you
   const o=scamOutcome(n,app);
-  if(o.robbed){ scammed(n,o.lost,o.lowc,'PISSED'); }
-  else{ P.conf=Math.min(100,P.conf+9); say(n.x,n.z,'+9 CONF','#c9d13a'); rumble(200,.3,.6,true);
-    if(app>=9.5){                                       // a real 10/10 — it goes one of two ways
-      if(Math.random()<0.4 && camLock===null && !boss){ // her man turns up
-        say(n.x,n.z-32,'...HER MAN','#ff2e88'); say(P.x,P.z-30,'INCOMING','#ff5a2e');
-        camLock=Math.max(0,P.x-170); spawnBoss(Math.max(1,Math.floor(P.x/4000)+1));
-      } else {                                          // she's into it — fists of fire for a while
-        P.fireT=780; say(P.x,P.z-22,'FISTS OF FIRE','#ff5a2e'); rumble(360,.8,.7,true); shake=4;
-      }
-    } }
+  if(o.robbed){ scammed(n,o.lost,o.lowc,'PISSED'); return; }
+  highReward(n);
 }
 
 //====================== the date — a rhythm mini-game ======================
-// take her out: notes fall in four lanes (the four action buttons); hit the beat.
+// take her out: notes fall in three lanes (flirt / joke / chat); hit the beat.
 // score her right and the flirt pays off; bomb it and she's not feeling it.
 const DATE_LANES=[
-  {act:'PUNCH', key:'J', col:'#3a7fd5'},
-  {act:'JUMP',  key:'K', col:'#5aa84a'},
-  {act:'DRINK', key:'L', col:'#d54a44'},
-  {act:'TALK',  key:'E', col:'#d5b23a'},
+  {act:'FLIRT', key:'J', col:'#d54a8a'},
+  {act:'JOKE',  key:'K', col:'#5aa84a'},
+  {act:'CHAT',  key:'L', col:'#3a7fd5'},
 ];
+const DATE_N=DATE_LANES.length;
 const DATE_FALL=70;                                       // frames a note falls before it should be hit
 const DATE_LW=56, DATE_GAP=8;                            // lane width + gap (wide enough to tap)
-function dateLayout(){ const totW=4*DATE_LW+3*DATE_GAP;
+function dateLayout(){ const totW=DATE_N*DATE_LW+(DATE_N-1)*DATE_GAP;
   return {lw:DATE_LW, gap:DATE_GAP, totW, x0:W/2-totW/2, topY:56, hitY:250}; }
-let dateTap=[false,false,false,false];                   // lane taps from touching the board directly
+let dateTap=[false,false,false];                         // lane taps from touching the board directly
 // touching a lane column registers that lane's hit — offsetX is in the canvas's own space, so it's
 // correct in both orientations. #touch.dating turns off the stick/buttons so taps reach the board.
 disp.addEventListener('pointerdown', e=>{
@@ -1227,7 +1249,7 @@ disp.addEventListener('pointerdown', e=>{
   const gx=e.offsetX/disp.clientWidth*W, gy=e.offsetY/disp.clientHeight*H;
   if(gy<44) return;
   const L=dateLayout(), l=Math.floor((gx-L.x0)/(L.lw+L.gap));
-  if(l>=0 && l<4 && gx>=L.x0-10 && gx<=L.x0+L.totW+10) dateTap[l]=true;
+  if(l>=0 && l<DATE_N && gx>=L.x0-10 && gx<=L.x0+L.totW+10) dateTap[l]=true;
 });
 function laneTap(l){ if(dateTap[l]){ dateTap[l]=false; return true; } return false; }
 function startDate(n){
@@ -1238,11 +1260,11 @@ function startDate(n){
   const notes=[]; let hitT=fall+18;
   const count=12+Math.floor(Math.random()*5);            // 12–16 notes
   for(let i=0;i<count;i++){
-    notes.push({lane:Math.floor(Math.random()*4), hitT, hit:false, miss:false});
+    notes.push({lane:Math.floor(Math.random()*DATE_N), hitT, hit:false, miss:false});
     hitT += Math.max(6,Math.round((Math.random()<0.22?14:26)*sp));   // ~a beat apart, tighter when drunk
   }
   date={ n, t:0, notes, endT:hitT+Math.round(30*sp), fall, dr, hits:0, perfect:0, total:count, combo:0, best:0, judge:'', jcol:'#fff', judgeT:0 };
-  dateTap=[false,false,false,false];
+  dateTap=[false,false,false];
   dateOn=true; P.state='idle'; P.talkN=n; n.listening=true; P.face=n.x>P.x?1:-1;
   $('touch').classList.add('dating');                    // the note board owns the screen now
   blip(520,.06);
@@ -1250,13 +1272,12 @@ function startDate(n){
 function dateInputs(){ const pad=pollPad();
   return [ tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH)||laneTap(0),
            tap('KeyK')||tapT('B')||(pad&&pad.JUMP) ||laneTap(1),
-           tap('KeyL')||tapT('C')||(pad&&pad.DRINK)||laneTap(2),
-           tap('KeyE')||tapT('D')||(pad&&pad.TALK) ||laneTap(3) ]; }
+           tap('KeyL')||tapT('C')||(pad&&pad.DRINK)||laneTap(2) ]; }
 function dateStep(){
   const d=date; if(!d){ dateOn=false; return; }
   d.t++; if(d.judgeT>0)d.judgeT--;
   const WIN=11, PERF=5, press=dateInputs();
-  for(let l=0;l<4;l++){ if(!press[l]) continue;
+  for(let l=0;l<DATE_N;l++){ if(!press[l]) continue;
     let best=null,bd=1e9;
     for(const nt of d.notes){ if(nt.hit||nt.miss||nt.lane!==l) continue;
       const df=Math.abs(nt.hitT-d.t); if(df<bd){bd=df;best=nt;} }
@@ -1286,11 +1307,11 @@ function resolveDate(n,score){
   if(o.robbed){ scammed(n,o.lost,o.lowc,'PLAYED'); return; }   // charmed... and cleaned out
   const cg=Math.round(6+score*12); P.conf=Math.min(100,P.conf+cg);
   say(n.x,n.z,'+'+cg+' CONF','#c9d13a'); rumble(220,.4,.6,true);
-  if(score>=0.8 && app>=9.5){                            // nailed a real 10/10
+  if(score>=0.8 && app>=9.5){                            // nailed a real 10/10 — the big payoff
     if(Math.random()<0.4 && camLock===null && !boss){
       say(n.x,n.z-32,'...HER MAN','#ff2e88'); say(P.x,P.z-30,'INCOMING','#ff5a2e');
       camLock=Math.max(0,P.x-170); spawnBoss(Math.max(1,Math.floor(P.x/4000)+1));
-    } else { P.fireT=780; say(P.x,P.z-22,'FISTS OF FIRE','#ff5a2e'); rumble(360,.8,.7,true); shake=4; }
+    } else highReward(n);                                // stat boost + flame powers
   }
 }
 function dateRender(){                                    // crisp overlay on the display, over the frozen street
@@ -1305,7 +1326,7 @@ function dateRender(){                                    // crisp overlay on th
     c.fillText(d.dr>0.85?'TOO DRUNK — SHE\'S A BLUR':'YOU\'RE SEEING DOUBLE', W/2, 48); }
 
   const L=dateLayout(), laneW=L.lw, gap=L.gap, x0=L.x0, topY=L.topY, hitY=L.hitY;
-  for(let l=0;l<4;l++){ const lx=x0+l*(laneW+gap);
+  for(let l=0;l<DATE_N;l++){ const lx=x0+l*(laneW+gap);
     c.fillStyle='rgba(20,16,30,.5)'; c.fillRect(lx,topY,laneW,hitY-topY+34);          // the tappable column
     c.strokeStyle='rgba(255,255,255,.06)'; c.lineWidth=1; c.strokeRect(lx+.5,topY+.5,laneW-1,hitY-topY+34);
     c.strokeStyle=DATE_LANES[l].col; c.lineWidth=2; c.strokeRect(lx+3,hitY-3,laneW-6,11);   // hit target
@@ -1549,9 +1570,9 @@ function update(){
 
   //---- meters
   P.drunk=Math.max(0,P.drunk-0.006);
-  // confidence bleeds all the time — you have to keep earning it in fights and with women.
+  // confidence bleeds all the time — you top it back up by chatting up low-key women (easy, safe).
   // REP (confFloor) sets the level it can never drop below.
-  P.conf=Math.max(confFloor(), P.conf-0.03);
+  P.conf=Math.max(confFloor(), P.conf-0.02);
   if(P.iframes>0)P.iframes--;
   if(P.hitFlash>0)P.hitFlash--;
   for(const e of ents) if(e.flash>0) e.flash--;
@@ -1730,6 +1751,8 @@ function update(){
 
   if(P.hp<=0){
     P.deaths++;
+    if(boss && camLock!==null){ bossDeaths++;          // dying to the boss you're currently fighting
+      if(bossDeaths>2 && !bossNagged){ bossNagged=true; showNotice('YOU SHOULD TRY NOT TO GET HIT'); } }
     P.hp=P.maxhp; P.drunk=0; P.money=Math.floor(P.money*(0.5+U.pockets*0.2));   // POCKETS: keep more when you fall
     P.x=Math.max(20,camX+40); P.z=300; P.y=0; P.vy=0; P.state='idle';
     P.step=0; P.buf=0; P.talkN=null; P.downT=0;
@@ -2845,7 +2868,7 @@ function loop(now){ requestAnimationFrame(loop);
     if(gp && gp.buttons.some(b=>b&&b.pressed)) startGame();
     titleRender(); return;
   }
-  if(paused||shopOpen){ acc=0; render(); return; }
+  if(noticeOn||paused||shopOpen){ acc=0; render(); return; }
   while(acc>=1/60){ update(); acc-=1/60; }
   render();
 }
