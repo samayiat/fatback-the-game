@@ -41,13 +41,34 @@ for wi,Wn in enumerate(WOMEN):
     for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
         add(f"w{wi}.rot.{d}", f"{Wn}/rotations/{d}.png")
 
+FOOT=70   # matches game.html: feet sit on this row of the 92px cell
+
+def reframe(im):
+    """The women were exported at 136px with the figure filling ~80% of the
+    frame — dropped straight in they tower over the 5'11 hero and their feet
+    land below the FOOT baseline. Crop to the actual figure, scale it to the
+    hero's proportions, and seat the feet on row FOOT so spr() places them
+    like every other sprite."""
+    a=im.getchannel("A"); bb=a.getbbox()
+    if not bb: return im.resize((S,S), Image.LANCZOS)
+    fig=im.crop(bb)
+    f=0.38                                   # 136px figure (~106px tall) -> ~40px, just under the men's 46
+    nw,nh=max(1,round(fig.width*f)),max(1,round(fig.height*f))
+    fig=fig.resize((nw,nh), Image.LANCZOS)
+    cell=Image.new("RGBA",(S,S),(0,0,0,0))
+    cell.paste(fig, ((S-nw)//2, FOOT-nh), fig)   # centered, feet on the baseline
+    return cell
+
+def is_woman(key): return key[:2] in ("w0","w1","w2","w3")
+
 n=len(entries)
 rows=(n+COLS-1)//COLS
 sheet=Image.new("RGBA",(COLS*S,rows*S),(0,0,0,0))
 index={}
 for i,(key,path) in enumerate(entries):
     im=Image.open(path).convert("RGBA")
-    if im.size!=(S,S): im=im.resize((S,S), Image.NEAREST)
+    if is_woman(key): im=reframe(im)
+    elif im.size!=(S,S): im=im.resize((S,S), Image.NEAREST)
     cx,cy=(i%COLS)*S,(i//COLS)*S
     sheet.paste(im,(cx,cy))
     index[key]=[cx,cy]

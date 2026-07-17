@@ -1,7 +1,13 @@
 // FATBACK service worker.
 // Two jobs: make the game playable with no signal, and satisfy Chrome's
 // installability check (which requires a fetch handler on a real origin).
-const CACHE = 'fatback-v1';
+//
+// The game document is served NETWORK-FIRST so a new deploy is picked up the
+// next time you're online — the old cache-first worker pinned players to the
+// first build they ever loaded. Static shell assets stay cache-first. Bump
+// VERSION on every shipped change so activate() clears the previous cache.
+const VERSION = 'v4-2026-07-17c';
+const CACHE = 'fatback-' + VERSION;
 const SHELL = [
   './',
   './index.html',
@@ -27,20 +33,39 @@ self.addEventListener('activate', e => {
   );
 });
 
-// Cache-first. The whole game is one 290KB file with the spritesheet baked in,
-// so once it's cached there is nothing left to fetch — it runs on a plane.
+function isDocument(req) {
+  if (req.mode === 'navigate') return true;
+  if (req.destination === 'document') return true;
+  const path = new URL(req.url).pathname;
+  return path.endsWith('/') || path.endsWith('/index.html');
+}
+
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(
-    caches.match(e.request).then(hit => {
-      if (hit) return hit;
-      return fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type === 'basic') {
+  const req = e.request;
+
+  if (isDocument(req)) {
+    // Network-first: always try for the freshest build, fall back to cache offline.
+    e.respondWith(
+      fetch(req).then(res => {
+        if (res && res.status === 200) {
           const copy = res.clone();
-          caches.open(CACHE).then(c => c.put(e.request, copy));
+          caches.open(CACHE).then(c => c.put('./index.html', copy));
         }
         return res;
-      }).catch(() => caches.match('./index.html'));
-    })
+      }).catch(() => caches.match(req).then(hit => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Cache-first for the static shell (icons, manifest) — they rarely change.
+  e.respondWith(
+    caches.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res && res.status === 200 && res.type === 'basic') {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy));
+      }
+      return res;
+    }).catch(() => caches.match('./index.html')))
   );
 });
