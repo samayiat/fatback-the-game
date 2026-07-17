@@ -582,7 +582,7 @@ function genChunk(ci){
   // a few breakables, mixed — not a wall of trash cans
   for(let i=0;i<3;i++){ const ty=['can','box','crate','dumpster'][Math.floor(R()*4)];
     cans.push({x:x0+40+R()*(CHUNK-80), z:FLOOR_N+8+R()*(FLOOR_S-FLOOR_N-16), type:ty,
-      hp: ty==='dumpster'?5:ty==='crate'?4:3, w: ty==='dumpster'?18:11, shake:0, dead:false, chunk:ci}); }
+      hp: ty==='box'?1:ty==='dumpster'?3:2, w: ty==='dumpster'?18:11, shake:0, dead:false, chunk:ci}); }
   // street furniture against the storefronts — trees, hydrants, benches, boxes, mailboxes
   for(let i=0;i<4;i++){ const ty=['tree','tree','hydrant','newsbox','bench','mailbox'][Math.floor(R()*6)];
     props.push({x:x0+30+R()*(CHUNK-60), z:FLOOR_N-2+R()*22, type:ty, ph:R()*9, chunk:ci}); }
@@ -1224,7 +1224,7 @@ function update(){
   //---- cans
   if(P.state==='punch' && P.st===cStep().su+1){ const b=atkBox();
     for(const c of cans){ if(c.dead)continue;
-      if(Math.abs(b.x-c.x)<(c.w||11)+11&&Math.abs(b.z-c.z)<14){ c.hp--; c.shake=6; shake=2; blip(140,.05);
+      if(Math.abs(b.x-c.x)<(c.w||11)+18&&Math.abs(b.z-c.z)<20){ c.hp--; c.shake=6; shake=2; blip(140,.05);
         if(c.hp<=0){ c.dead=true; puff(c.x,c.z,20,c.type==='dumpster'?16:10,'#6b6478'); const r=Math.random();
           const trash = c.type==='can'||c.type==='dumpster';        // rats nest in the trash, not the crates
           if(r<0.34 && trash){ for(let i=0;i<(c.type==='dumpster'?4:3);i++) ents.push(rat(c.x+rnd(-10,10),c.z)); say(c.x,c.z,'RATS','#7d7791'); }
