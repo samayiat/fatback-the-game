@@ -78,8 +78,10 @@ const driver = `
    get drops(){return drops}, get fires(){return fires}, get cans(){return cans},
    get BUILDINGS(){return BUILDINGS}, get GATES(){return GATES}, get U(){return U},
    get UPG(){return UPG}, get COMBO(){return COMBO}, get camX(){return camX},
+   get boss(){return boss}, get camLock(){return camLock},
    spawn:(e)=>ents.push(e), clearEnts:()=>{ ents.length=0; },
-   rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro});
+   rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
+   genBoss,spawnBoss,updateBoss,killBoss});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
 ;globalThis.__tick=(n)=>{ for(let i=0;i<n;i++){ update(); } };
 ;globalThis.__draw=()=>render();
