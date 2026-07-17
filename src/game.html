@@ -877,8 +877,8 @@ function updateBoss(b){
 }
 
 //====================== combat ======================
-function atkBox(){ const s=cStep(); const reach = (P.step===3?64:52)+U.reach*9;   // REACH extends the arc
-  return {x:P.x+P.face*(16+reach/2), z:P.z, rw:reach/2, rd:20+U.reach*3}; }   // wide arc — the swing catches a crowd
+function atkBox(){ const s=cStep(); const reach = (P.step===3?36:28)+U.reach*7;   // ~one body-length ahead; REACH extends it
+  return {x:P.x+P.face*(16+reach/2), z:P.z, rw:reach/2, rd:18+U.reach*3}; }   // arc catches whoever's right in front of you
 function hits(b,e){ return Math.abs(b.x-e.x)<b.rw+e.w && Math.abs(b.z-e.z)<b.rd+e.d; }
 
 function connect(e,s){
