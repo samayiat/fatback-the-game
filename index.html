@@ -154,6 +154,7 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
             <div class="row"><button class="mini" id="d_sober">SOBER UP</button><button class="mini" id="d_drunk">+40 DRUNK</button></div>
             <div class="row"><button class="mini" id="d_cash">+$100</button><button class="mini" id="d_conf">+30 CONF</button></div>
             <div class="row"><button class="mini" id="d_kill">CLEAR WAVE</button><button class="mini" id="d_reset">RESET RUN</button></div>
+            <div class="row"><button class="mini" id="d_boss" style="width:100%">BOSS GAUNTLET</button></div>
           </div>
           <div class="col">
             <h2>KEYS</h2>
@@ -410,6 +411,8 @@ $('d_cash').onclick=()=>P.money+=100;
 $('d_conf').onclick=()=>P.conf=Math.min(100,P.conf+30);
 $('d_kill').onclick=()=>{ for(const e of ents) if(!e.dead){e.hp=0;e.dead=1;} };
 $('d_reset').onclick=()=>{ reset(); setPause(false); };
+$('d_boss').onclick=()=>{ for(const e of ents) e.dead=Math.max(e.dead,1); camLock=null; boss=null;
+  gauntlet=3; gauntletIx=0; setPause(false); forceBoss(); };   // clear the street, then one of each
 $('install').onclick=async()=>{
   if(deferredPrompt){ deferredPrompt.prompt(); try{ await deferredPrompt.userChoice; }catch(e){} deferredPrompt=null; return; }
   $('a2hsBody').innerHTML=a2hsText(); $('a2hs').classList.add('on');
@@ -600,6 +603,7 @@ function stream(){
   ents=ents.filter(e=>e.x>camX-460 && e.x<camX+W+460);
 }
 let camX=0, camLock=null, t=0, shake=0, hitstop=0;
+let boss=null, bossDone=0;                 // the current boss entity, and the highest 250m threshold started
 
 const P={};
 function reset(){
@@ -611,6 +615,7 @@ function reset(){
   P.maxhp=100; P.conf=0;
 
   ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;
+  boss=null; bossDone=0; gauntlet=0; gauntletIx=0;
   cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
   best=Math.max(best||0, 0);
@@ -751,6 +756,115 @@ function spawnWave(T){
   say(P.x,P.z-40,'FIGHT','#ff2e88');
 }
 
+//====================== bosses ======================
+// every 250m the street clears and a giant procedural monster rises. three archetypes,
+// each rolled fresh from the boss number so no two encounters are the same.
+const BOSS_ARCH=['ratking','bouncer','crawler'];
+const BOSS_NAME={ratking:'THE RAT KING',bouncer:'THE BOUNCER',crawler:'THE CRAWLER'};
+const BOSS_PAL={
+  ratking:{body:'#4a3a2c',dark:'#2b2016',glow:'#ff5a2e'},
+  bouncer:{body:'#3a3d4a',dark:'#22242e',glow:'#ff2e88'},
+  crawler:{body:'#2f4a30',dark:'#182a18',glow:'#c9ff3a'},
+};
+const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep']};
+
+function genBoss(bn,forceArch){
+  const sd=bn*97.31+3.7, H=k=>hsh(sd+k*1.7);
+  const arch=forceArch||BOSS_ARCH[(bn-1+Math.floor(H(1)*3))%3];   // rotate + roll so all three recur
+  const mul={ratking:1,bouncer:1.15,crawler:0.85}[arch];
+  const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
+    x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
+    weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,
+    hp:0,maxhp:0, sc: arch==='crawler'?2.6:3.1,
+    segs: arch==='ratking'?4+Math.floor(H(3)*4):3,
+    legs: arch==='crawler'?6+Math.floor(H(4)*5):(arch==='ratking'?4:2),
+    spd: arch==='crawler'?1.5:(arch==='bouncer'?0.7:1.05),
+    dmg:10 };
+  b.maxhp=b.hp=Math.round((220+bn*90)*mul);
+  b.w= arch==='crawler'?46:36; b.d=18; b.h= arch==='bouncer'?98:76;
+  return b;
+}
+
+function spawnBoss(bn,forceArch){
+  const b=genBoss(bn,forceArch);
+  b.x=clamp(camLock+W*0.72, camLock+60, camLock+W-60); b.z=FLOOR_N+34; b.face=-1;
+  boss=b; ents.push(b);
+  for(const g of GATES) if(g.x<P.x && !g.done) g.done=true;   // no gate wave stacks onto/after the boss
+  shake=12; rumble(760,1,.7,true); blip(60,.1);
+  say(P.x,P.z-54,'BOSS','#ff2e88'); say(b.x,b.z-84,b.name,b.pal.glow);
+  P.iframes=Math.max(P.iframes,54);        // the entrance isn't a free hit on you
+}
+
+// dev gauntlet: fight one of each archetype back to back, right where you stand
+let gauntlet=0, gauntletIx=0;
+function forceBoss(){
+  if(camLock!==null || boss) return;
+  gauntletIx++;
+  camLock=Math.max(0,P.x-170);
+  spawnBoss(gauntletIx, BOSS_ARCH[(gauntletIx-1)%3]);
+}
+
+function killBoss(b){
+  b.dead=1; b.state='dead'; b.tok=false;
+  P.conf=Math.min(100,P.conf+30);
+  P.hp=Math.min(P.maxhp, P.hp+Math.round(P.maxhp*0.6));   // the reward that lets you keep going
+  shake=15; rumble(820,1,1,true);
+  say(b.x,b.z-80,'DROPPED','#ff5a2e');
+  for(let i=0;i<10;i++) drop(b.x+rnd(-70,70),b.z,'cash');
+  drop(b.x-12,b.z,'jameson'); drop(b.x+12,b.z,'jameson');
+  for(let i=0;i<24;i++) puff(b.x+rnd(-60,60),b.z,rnd(0,50),1,b.pal.glow);
+}
+
+function bossHit(reach,zr,dmg){                            // shared melee check for boss attacks
+  if(boss.hitDone) return;
+  if(Math.abs(P.x-(boss.x+boss.face*reach*0.55))<reach && Math.abs(P.z-boss.z)<zr){
+    hurtPlayer(dmg,boss.x); boss.hitDone=true; }
+}
+function bossAttack(b,dx,dz,d){
+  const m=b.move, ch=chinAt();
+  if(m==='fire'){ if(b.st>6 && b.st<34 && b.st%2===0) emitFire(b); }
+  else if(m==='stomp'){
+    if(b.st===12){ shake=11; rumble(320,1,.5,true);        // slam → ground shockwave
+      if(P.y<26 && Math.abs(P.x-b.x)<140){ hurtPlayer(ch+8,b.x); }
+      for(let i=0;i<16;i++) puff(b.x+rnd(-46,46),b.z,rnd(0,6),1,'#6b6478'); } }
+  else if(m==='charge'){ if(b.st<30){ b.x+=b.face*b.spd*3.0; bossHit(42,18,ch+4); } }
+  else if(m==='hook'){ if(b.st>8 && b.st<18) bossHit(54,18,ch+6); }
+  else if(m==='stab'){ if(b.st>8 && b.st<16) bossHit(30,22,ch+4); }
+  else if(m==='sweep'){ if(b.st>6 && b.st<20) bossHit(60,20,ch+2); }
+}
+
+function updateBoss(b){
+  b.anim+=0.05; if(b.flash>0)b.flash--; if(b.weakOpen>0)b.weakOpen--;
+  const dx=P.x-b.x, dz=P.z-b.z, d=Math.abs(dx);
+  if(b.state!=='intro') b.face=dx>0?1:-1;
+
+  if(b.state==='intro'){ b.st++; b.rise=Math.max(0,1-b.st/40);
+    if(b.st===1){ shake=10; } if(b.st>=46){ b.state='idle'; b.cd=44; } return; }
+  if(b.state==='dead'){ b.st++; return; }
+  if(b.state==='stagger'){ b.st++; b.weakOpen=6; if(b.st>=90){ b.state='idle'; b.cd=28; } return; }
+  if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=46){ b.state='idle'; b.cd=rnd(24,64); } return; }
+  if(b.state==='wind'){ b.st++; if(b.st===1) blip(60,.06);
+    if(b.st>=b.windLen){ b.state='attack'; b.st=0; b.hitDone=false; } return; }
+  if(b.state==='attack'){ b.st++; bossAttack(b,dx,dz,d);
+    if(b.st>=b.atkLen){ b.state='recover'; b.st=0; }
+    b.x=clamp(b.x,camLock+30,camLock+W-30); return; }
+
+  // idle / approach
+  b.st++;
+  if(d>92) b.x+=b.face*b.spd;
+  b.z+=clamp(dz,-1,1)*b.spd*0.4; b.z=clamp(b.z,FLOOR_N,FLOOR_S);
+  b.x=clamp(b.x,camLock+30,camLock+W-30);
+  b.cd-=(P.state==='talk'?2:1);
+  if(b.dmgTaken>b.maxhp*0.15){ b.dmgTaken=0; b.state='stagger'; b.st=0;
+    shake=6; rumble(220,.6,.5,true); say(b.x,b.z-64,'STAGGERED',b.pal.glow); return; }
+  if(b.cd<=0){
+    const m=b.moves[Math.floor(Math.random()*b.moves.length)];
+    b.move=m; b.state='wind'; b.st=0;
+    b.windLen= m==='fire'?34:(m==='stomp'?26:(m==='charge'?20:24));
+    b.atkLen = m==='fire'?40:(m==='charge'?46:(m==='stomp'?26:26));
+  }
+}
+
 //====================== combat ======================
 function atkBox(){ const s=cStep(); const reach = P.step===3?64:52;
   return {x:P.x+P.face*(16+reach/2), z:P.z, rw:reach/2, rd:20}; }   // wide arc — the swing catches a crowd
@@ -758,8 +872,18 @@ function hits(b,e){ return Math.abs(b.x-e.x)<b.rw+e.w && Math.abs(b.z-e.z)<b.rd+
 
 function connect(e,s){
   const crit=Math.random()<critChance();
-  const dmg = s.dmg*(1+P.conf/200)*P.dmgMul*dmgUp()*(crit?2.4:1);
+  const wp=(e.k==='boss'&&e.weakOpen>0)?2.4:1;     // land your string in the exposed window
+  const dmg = s.dmg*(1+P.conf/200)*P.dmgMul*dmgUp()*(crit?2.4:1)*wp;
   e.hp-=dmg;
+  if(e.k==='boss'){                                // bosses don't stun/launch/smash — they chip and stagger
+    e.flash=8; hitstop=crit?7:4; shake=Math.max(shake,crit?5:2.4);
+    rumble(crit?150:80,.5,.6,true);
+    puff(e.x-P.face*10, e.z, e.h*0.5, crit?8:4, e.weakOpen>0?e.pal.glow:'#e8e2d4');
+    blip(crit?200:340,.06); P.drunk=Math.max(0,P.drunk-0.5);
+    e.dmgTaken=(e.dmgTaken||0)+dmg;
+    if(e.hp<=0 && !e.dead) killBoss(e);
+    return crit;
+  }
   // hits 1-3: LOCK. no push, no drift, no escape. the string has to land.
   e.hitstun=s.stun; e.state='stun'; e.tok=false; e.flash=s.launch?14:8;
   if(s.push){ e.vx=P.face*s.push; e.vy=s.y; e.state='launch'; e.hitstun=s.stun; }
@@ -1016,19 +1140,24 @@ function update(){
   if(P.scammedBy && P.drunk<28 && !P.scammedBy.revealed){ P.scammedBy.revealed=true;
     say(P.scammedBy.x,P.scammedBy.z,P.scammedBy.trueTier+'/10','#5c5670'); P.scammedBy=null; }
 
-  //---- gates + camera
-  for(const g of GATES) if(!g.done && P.x>g.x && camLock===null){
+  //---- boss every 250m (4000px), else normal gates
+  const bn=Math.floor(P.x/4000);
+  if(bn>bossDone && bn>0 && camLock===null){ bossDone=bn; camLock=Math.max(0,P.x-170); spawnBoss(bn); }
+  for(const g of GATES) if(!g.done && P.x>g.x && P.x-g.x<140 && camLock===null){   // only the gate you JUST crossed — never one far behind
     camLock=Math.max(0,g.x-170); spawnWave(tier()); g.done='fight'; }
   if(camLock!==null && !OPT.freecam){
     camX+=(camLock-camX)*0.1;
-    if(t%20===0 && !ents.some(e=>!e.dead)){ camLock=null; for(const g of GATES) if(g.done==='fight')g.done=true;
-      say(P.x,P.z-40,'GO →','#c9d13a'); }
+    if(t%20===0 && !ents.some(e=>!e.dead)){ camLock=null; boss=null;
+      for(const g of GATES) if(g.done==='fight' || g.x<P.x-40) g.done=true;   // retire this fight + anything already behind you, so nothing yanks you back
+      say(P.x,P.z-40,'GO →','#c9d13a');
+      if(gauntlet>0){ gauntlet--; if(gauntlet>0) forceBoss(); else say(P.x,P.z-58,'GAUNTLET CLEARED','#c9d13a'); } }
   } else { camX+=((P.x-W*0.42)-camX)*0.09; camX=Math.max(0,camX); }
 
   //---- enemies
   let toks=ents.filter(e=>!e.dead&&e.tok).length;
   for(const e of ents){
     if(e.dead){ e.dead++; e.x+=e.vx; e.vx*=0.9; continue; }
+    if(e.k==='boss'){ updateBoss(e); continue; }   // the giant has its own state machine
 
     if(e.state==='launch'){                    // knocked back by the finisher
       e.x+=e.vx; e.vx*=0.9; e.y+=e.vy; e.vy-=0.34;
@@ -1491,6 +1620,89 @@ function drawBigRat(e){
   ebar(e,68,y-58,false,true);
 }
 
+// procedural boss renderer — all fillRects/curves off (sx, ground, face, scale), same idiom as
+// drawBigRat. G grows the body up out of the street during the intro; weak point glows additive.
+function drawBoss(b){
+  const sx=b.x-camX, gy=b.z-b.y, f=b.face, S=b.sc;
+  const G=b.state==='intro'?(1-b.rise):1;
+  shadow(b.x,b.z,30*Math.max(.2,G));
+  if(G<=0.02) return;
+  const hit=b.hitstun>0||b.flash>3;
+  const body=hit?'#ffffff':b.pal.body, dark=hit?'#e6e6ee':b.pal.dark, glow=b.pal.glow;
+  const bob=Math.sin(b.anim*2)*2.4;
+  const winding=(b.state==='wind'||b.state==='attack');
+  const wg=(b.weakOpen>0)?(0.55+0.45*Math.sin(t*0.4)):(0.26+0.1*Math.sin(t*0.1));
+  // R: rect centered at base-x `x` (×face), bottom `yb` above ground, base size w×h
+  const R=(x,yb,w,h,col)=>{ const bw=w*S, bh=h*S*G;
+    ctx.fillStyle=col; ctx.fillRect(Math.round(sx+x*f*S-bw/2), Math.round(gy-yb*S*G-bh+bob), bw, bh); };
+  const glowBlob=(x,yb,r)=>{ ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=wg;
+    ctx.fillStyle=glow; ctx.beginPath(); ctx.ellipse(sx+x*f*S, gy-yb*S*G+bob, r*S, r*S*G, 0,0,7); ctx.fill(); ctx.restore(); };
+
+  if(b.arch==='bouncer'){
+    const stomp=winding&&b.move==='stomp';
+    const fist= stomp ? (b.state==='wind'? 28+b.st*0.2 : 28-Math.min(30,b.st*1.7)) : 14+Math.sin(b.anim*2)*1.4;
+    R(-5,0,6,12,dark); R(5,0,6,12,dark);                 // legs
+    R(0,10,20,14,body);                                  // torso slab
+    R(0,22,26,5,dark);                                   // shoulders
+    R(-13,fist-8,7,9,body); R(13,fist-8,7,9,body);       // upper arms
+    R(-14,fist-9,8,7,dark); R(14,fist-9,8,7,dark);       // fists
+    R(0,25,9,8,body);                                    // head
+    R(-2.4,29,1.6,1.6,glow); R(2.4,29,1.6,1.6,glow);     // eyes
+    glowBlob(0,17,3.4);                                  // heart (weak point)
+  }
+  else if(b.arch==='ratking'){
+    ctx.strokeStyle=dark; ctx.lineWidth=3.5*S*G;         // tail
+    ctx.beginPath(); ctx.moveTo(sx-f*10*S, gy-9*S*G+bob);
+    ctx.quadraticCurveTo(sx-f*30*S, gy-18*S*G+Math.sin(t*.07)*8, sx-f*40*S, gy-2*S*G);
+    ctx.stroke();
+    for(let i=0;i<b.legs;i++){ const lx=-8+i*(16/Math.max(1,b.legs-1)); const ph=Math.max(0,Math.sin(t*.18+i*1.3))*2;
+      R(lx,0,2.4,7+ph,dark); }                           // scuttling legs
+    for(let i=0;i<b.segs;i++){ const u=i/Math.max(1,b.segs-1); const w=16-u*8, x=-8+u*14, yb=7+Math.sin(b.anim*2+i)*0.6;
+      R(x,yb,w,12-u*3, i%2?dark:body); }                 // body segments back→front
+    R(11,9,15,15,body); R(20,11,9,7,body);               // head + snout
+    R(12,22,6,7,dark);                                   // ear
+    R(9,26,3,4,glow); R(13,26,3,4,glow);                 // little crown (it's a king)
+    R(24,10,4,4,'#b9b2cf');                              // teeth
+    if(winding&&b.move==='fire') glowBlob(23,13,3.4);    // charging maw
+    glowBlob(15,16,1.9); R(14.5,15.5,2,2,'#ff2e88');     // eye (weak point)
+  }
+  else {                                                 // crawler
+    ctx.strokeStyle=dark; ctx.lineWidth=2.2*S*G;
+    for(let i=0;i<b.legs;i++){ const side=i%2?1:-1, idx=Math.floor(i/2);
+      const ph=Math.sin(t*.2+i*0.9)*3;
+      const hipx=sx+(-2+idx*2)*f*S, hipy=gy-10*S*G+bob;
+      const kneex=hipx+side*(10+idx*3)*S, kneey=gy-(12+ph)*S*G+bob;
+      const footx=hipx+side*(16+idx*4)*S, footy=gy-1*S*G;
+      ctx.beginPath(); ctx.moveTo(hipx,hipy); ctx.lineTo(kneex,kneey); ctx.lineTo(footx,footy); ctx.stroke(); }
+    ctx.fillStyle=body; ctx.beginPath(); ctx.ellipse(sx-f*10*S, gy-11*S*G+bob, 12*S, 10*S*G,0,0,7); ctx.fill();
+    ctx.fillStyle=dark;  ctx.beginPath(); ctx.ellipse(sx-f*10*S, gy-11*S*G+bob, 12*S, 10*S*G,0,-0.5,3.6); ctx.fill();
+    glowBlob(-10,11,4.6);                                // abdomen (weak point)
+    R(7,7,11,9,body);                                    // cephalothorax
+    for(let i=0;i<4;i++) R(9+(i%2)*2.4, 12-(i>1?2:0), 1.4,1.4, glow);   // eye cluster
+    R(14,7,4,3,dark);                                    // mandibles
+    if(winding&&b.move==='stab') glowBlob(12,10,2.6);
+  }
+
+  if(b.state==='wind'){ ctx.globalAlpha=.5+.5*Math.sin(t*.5); ctx.fillStyle='#ff5a2e';
+    ctx.font='bold 11px "JetBrains Mono",monospace'; ctx.textAlign='center';
+    ctx.fillText('!!', sx, gy-(b.h+8)*G+bob); ctx.globalAlpha=1; }
+}
+
+function drawBossBar(){
+  const b=boss, fr=clamp(b.hp/b.maxhp,0,1);
+  const bw=W-150, bx=(W-bw)/2, by=14;
+  ctx.textAlign='center';
+  ctx.fillStyle=b.pal.glow; ctx.font='bold 8px "JetBrains Mono",monospace';
+  ctx.fillText(b.name, W/2, by-3);
+  ctx.fillStyle='rgba(6,4,10,.85)'; ctx.fillRect(bx-2,by,bw+4,7);
+  ctx.fillStyle='#3a1220'; ctx.fillRect(bx,by+1,bw,5);
+  ctx.fillStyle= fr>.5?'#ff2e88':fr>.25?'#ff8c3a':'#ff5a2e';
+  ctx.fillRect(bx,by+1,bw*fr,5);
+  if(b.flash>0){ ctx.fillStyle='#fff'; ctx.globalAlpha=b.flash/8; ctx.fillRect(bx,by+1,bw,5); ctx.globalAlpha=1; }
+  ctx.fillStyle='rgba(11,10,16,.5)'; for(let i=1;i<20;i++) ctx.fillRect(bx+bw/20*i,by+1,1,5);
+  ctx.strokeStyle=b.pal.glow; ctx.lineWidth=1; ctx.strokeRect(bx-2.5,by+0.5,bw+5,6);
+}
+
 function drawFires(){
   ctx.globalCompositeOperation='lighter';
   for(const f of fires){ const a=clamp(f.life/22,0,1)*.85;
@@ -1703,6 +1915,8 @@ function hud(){
     ctx.font='7px "JetBrains Mono",monospace'; ctx.fillText('TALKING · GUARD DOWN · 1.5x DMG',W/2,H-14); }
 
   // the street doesn't end, so there's no bar to fill. how far, and how bad it's got.
+  if(boss && !boss.dead){ drawBossBar(); }               // a boss owns the top of the screen
+  else {
   ctx.textAlign='center';
   ctx.font='bold 11px "JetBrains Mono",monospace'; ctx.fillStyle='#e8e2d4';
   ctx.fillText(Math.floor(P.x/16)+'m', W/2, 18);
@@ -1716,6 +1930,7 @@ function hud(){
     ctx.fillStyle='#3a3550'; ctx.fillRect(W/2-40,31,80*d,2); }
   if(camLock!==null){ ctx.fillStyle='#ff2e88'; ctx.font='9px "JetBrains Mono",monospace';
     ctx.fillText(ents.filter(e=>!e.dead).length+' LEFT',W/2,37); }
+  }
 
   if(OPT.fd){ ctx.textAlign='left'; ctx.font='7px "JetBrains Mono",monospace'; ctx.fillStyle='#3ad1ff';
     const st=cStep();
@@ -1735,7 +1950,7 @@ function render(){
   for(const c of cans) if(!c.dead) list.push({z:c.z,f:()=>drawCan(c)});
   for(const n of npcs) if(Math.abs(n.x-camX-W/2)<W) list.push({z:n.z,f:()=>drawNPC(n)});
   for(const d of drops) list.push({z:d.z,f:()=>drawDrop(d)});
-  for(const e of ents) list.push({z:e.z,f:()=>e.k==='rat'?drawRat(e):drawVamp(e)});
+  for(const e of ents) list.push({z:e.z,f:()=>e.k==='boss'?drawBoss(e):e.k==='rat'?drawRat(e):drawVamp(e)});
   list.push({z:P.z,f:drawPlayer});
   list.sort((a,b)=>a.z-b.z);
   for(const o of list) o.f();
