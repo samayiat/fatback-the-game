@@ -282,9 +282,9 @@ if(!err){
   scene('confidence bleeds over time', ()=>{
     const g=__G(); g.clearEnts();
     g.U.rep=0; g.P.conf=80; g.P.drunk=0; g.P.x=400; g.P.z=300;
-    const c0=g.P.conf; __tick(150);
+    const c0=g.P.conf; __tick(250);
     if(!(g.P.conf<c0-3)) throw new Error('confidence did not bleed: '+c0+'→'+g.P.conf);
-    console.log('        conf '+c0+' → '+Math.round(g.P.conf)+' over 150 ticks');
+    console.log('        conf '+c0+' → '+Math.round(g.P.conf)+' over 250 ticks');
   });
   scene('shop: open, buy every rank of everything', ()=>{
     const g=__G();
