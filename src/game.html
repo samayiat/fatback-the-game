@@ -538,7 +538,7 @@ function genChunk(ci){
   const R=()=>hsh(ci*131.7+(k++)*7.13+0.5);
   let x=x0;
   while(x<x0+CHUNK){
-    const w=145+Math.floor(R()*95), club=R()<0.54;
+    const w=145+Math.floor(R()*95), club=R()<0.48;   // a few more storefronts so shops/liquor have homes
     const b={x,w,chunk:ci,kind:club?'club':'shop',open:0,doorX:x+w/2,
       name:(club?CLUBNAMES:SHOPNAMES)[Math.floor(R()*(club?CLUBNAMES.length:SHOPNAMES.length))],
       hue:(club?CLUBHUE:SHOPHUE)[Math.floor(R()*4)]};
@@ -564,12 +564,15 @@ function genChunk(ci){
       CLUBS=BUILDINGS.filter(q=>q.kind==='club');
     }
   }
-  // most blocks get a liquor store — booze on the street, taken from a leftover storefront
-  if(hsh(ci*5.31+9.2)<0.62){
-    const shops=BUILDINGS.filter(b=>b.chunk===ci && b.kind==='shop');
-    if(shops.length){
-      const b=shops[Math.floor(R()*shops.length)];
+  // most blocks get a liquor store — prefer a spare storefront, but a club will do so it always appears
+  if(hsh(ci*5.31+9.2)<0.7){
+    const mine=BUILDINGS.filter(b=>b.chunk===ci && b.kind!=='burger');
+    const shops=mine.filter(b=>b.kind==='shop');
+    const pool=shops.length?shops:mine;
+    if(pool.length){
+      const b=pool[Math.floor(R()*pool.length)];
       b.kind='liquor'; b.hue='#ff5a2e'; b.name='LIQUOR';
+      CLUBS=BUILDINGS.filter(q=>q.kind==='club');   // recompute in case we took a club
     }
   }
   for(let i=0;i<3;i++) GRATES.push({x:x0+R()*CHUNK, z:FLOOR_N+32+R()*(FLOOR_S-FLOOR_N-44), open:0, chunk:ci});
@@ -1235,6 +1238,26 @@ function bg(){
       ctx.fillStyle='#ffb545'; ctx.fillRect(sx-14,gy,b.w+28,FLOOR_N-gy+40);
       ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
     }
+    if(b.kind==='liquor'){                       // a lit window full of bottles — the other place money matters
+      const gy=top+8;
+      ctx.fillStyle='#0f1613'; ctx.fillRect(sx+4,gy,b.w-8,FLOOR_N-gy-2);
+      const wg=ctx.createLinearGradient(0,gy,0,FLOOR_N);        // cold fluorescent spill
+      wg.addColorStop(0,'#7dffbe'); wg.addColorStop(1,'#176a48');
+      ctx.globalAlpha=.30; ctx.fillStyle=wg; ctx.fillRect(sx+8,gy+18,b.w-16,FLOOR_N-gy-26); ctx.globalAlpha=1;
+      for(let r=0;r<2;r++){ const ry=gy+20+r*17;                // two shelves of bottles
+        ctx.fillStyle='#0b1210'; ctx.fillRect(sx+8,ry+11,b.w-16,2);
+        for(let i=0;i*9<b.w-24;i++){ const bxp=sx+12+i*9;
+          ctx.fillStyle=['#c9d13a','#2f7a3f','#b5471f','#e8e2d4','#7a3f8f'][(i+r*2)%5];
+          ctx.fillRect(bxp,ry+3,4,9); ctx.fillStyle='#0b0a10'; ctx.fillRect(bxp+1,ry,2,3); } }
+      const by2=top+2;                                          // neon storefront sign box
+      ctx.fillStyle='#0b0a10'; ctx.fillRect(sx+b.w/2-30,by2,60,20);
+      ctx.fillStyle='#2f7a3f'; ctx.fillRect(sx+b.w/2-22,by2+6,6,10);        // little bottle glyph
+      ctx.fillStyle='#c9d13a'; ctx.fillRect(sx+b.w/2-21,by2+8,4,3);
+      ctx.fillStyle='#2f7a3f'; ctx.fillRect(sx+b.w/2-20,by2+3,2,3);
+      ctx.font='bold 7px "JetBrains Mono",monospace'; ctx.textAlign='left';
+      const buzz=hsh(Math.floor(t/10)+b.x)<0.06?0.3:1;
+      ctx.globalAlpha=buzz; ctx.fillStyle=b.hue; ctx.fillText(b.name, sx+b.w/2-12, by2+13); ctx.globalAlpha=1;
+    }
     // the doorway is a hole, not a decal — it's where they come from
     const dw=b.kind==='club'?54:40, dx=b.doorX-camX;
     ctx.fillStyle='#07050c'; ctx.fillRect(dx-dw/2,FLOOR_N-58,dw,58);
@@ -1289,14 +1312,16 @@ function bg(){
   ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
 
   //---- shop prompt
-  for(const b of BUILDINGS){ if(b.kind!=='burger') continue;
+  for(const b of BUILDINGS){ if(b.kind!=='burger'&&b.kind!=='liquor') continue;
     const dx=b.doorX-camX; if(dx<-60||dx>W+60) continue;
     if(P.atShop===b){
       const busy=ents.some(e=>!e.dead && Math.abs(e.x-P.x)<W*0.6);
+      const liq=b.kind==='liquor';
       ctx.textAlign='center'; ctx.font='bold 8px "JetBrains Mono",monospace';
-      ctx.fillStyle=busy?'#5c5670':'#ffd98a';
+      ctx.fillStyle=busy?'#5c5670':(liq?'#8affc8':'#ffd98a');
       ctx.globalAlpha=busy?1:(.6+.4*Math.sin(t*.12));
-      ctx.fillText(busy?'NOT WHILE THEY ON YOU':(OPT.touch?'TALK TO EAT':'[E] EAT'), dx, FLOOR_N-66);
+      const label=liq?(OPT.touch?'TALK TO BUY':'[E] LIQUOR'):(OPT.touch?'TALK TO EAT':'[E] EAT');
+      ctx.fillText(busy?'NOT WHILE THEY ON YOU':label, dx, FLOOR_N-66);
       ctx.globalAlpha=1;
     }
   }
@@ -1504,7 +1529,7 @@ function drawNPC(n){ const sx=n.x-camX; shadow(n.x,n.z,14);
   const dir = n.blown ? 'north' : (Math.abs(n.x-P.x)<130 ? (P.x<n.x?'south-west':'south-east') : 'south');
   let ntint=null, namt=0;
   if(n.blown){ ntint='#17151d'; namt=.62; } else if(n.talked){ ntint='#2a2636'; namt=.36; }
-  spr('w'+(n.who||0)+'.rot.'+dir, sx, n.z, 1, ntint, namt, 0.92);
+  spr('w'+(n.who||0)+'.rot.'+dir, sx, n.z, 1, ntint, namt, 1);
   if(n.blown && Math.abs(n.x-P.x)<50 && Math.abs(n.z-P.z)<34){   // back turned, and staying that way
     ctx.fillStyle='#5c5670'; ctx.font='7px "JetBrains Mono",monospace'; ctx.textAlign='center';
     ctx.fillText('✕', sx, n.z-74); }
