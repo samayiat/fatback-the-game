@@ -157,6 +157,8 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
             <div class="row"><button class="mini" id="d_cash">+$100</button><button class="mini" id="d_conf">+30 CONF</button></div>
             <div class="row"><button class="mini" id="d_kill">CLEAR WAVE</button><button class="mini" id="d_reset">RESET RUN</button></div>
             <div class="row"><button class="mini" id="d_boss" style="width:100%">BOSS GAUNTLET</button></div>
+            <div class="row" style="justify-content:flex-start"><span style="font-size:8px;color:#5c5670;letter-spacing:.12em">SPAWN BOSS</span></div>
+            <div class="row" id="d_bosssel" style="flex-wrap:wrap;gap:4px;justify-content:flex-start"></div>
           </div>
           <div class="col">
             <h2>KEYS</h2>
@@ -865,6 +867,20 @@ function forceBoss(){
   camLock=Math.max(0,P.x-170);
   spawnBoss(gauntletIx, BOSS_ARCH[(gauntletIx-1)%BOSS_ARCH.length]);
 }
+// dev: jump straight to a specific archetype, clearing whatever's up
+function devBoss(arch){
+  for(const e of ents) e.dead=Math.max(e.dead,1);   // clear the street + any current boss
+  camLock=null; boss=null; gauntlet=0; gauntletIx=0;
+  camLock=Math.max(0,P.x-170);
+  spawnBoss(Math.max(1,Math.floor(P.x/4000)+1), arch);
+  setPause(false);
+}
+// build the dev boss-select from the roster so it stays in sync as archetypes are added
+(()=>{ const sel=$('d_bosssel'); if(!sel) return;
+  for(const a of BOSS_ARCH){ const btn=document.createElement('button');
+    btn.className='mini'; btn.textContent=BOSS_NAME[a].replace(/^THE /,'');
+    btn.onclick=()=>devBoss(a); sel.appendChild(btn); }
+})();
 
 function killBoss(b){
   b.dead=1; b.state='dead'; b.tok=false;
