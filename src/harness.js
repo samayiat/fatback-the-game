@@ -218,6 +218,38 @@ if(!err){
     if(!sawBullet) throw new Error('gun phase fired no bullets');
     console.log('        deli guard→boot→gun ok; bullets sprayed');
   });
+  scene('subway boss: the train sweeps the rail and ends cleanly (no softlock)', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=232; g.P.y=0; g.P.vy=0; g.P.drunk=80; g.P.state='idle';
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'subway'); const b=g.boss;
+    if(!b||b.arch!=='subway') throw new Error('subway boss did not spawn');
+    for(let i=0;i<50;i++){ __tick(1); __draw(); }
+    b.trainCd=1; let sawTrain=false; const hp0=g.P.hp;
+    for(let i=0;i<220;i++){ if(g.P.hp>=hp0){ g.P.z=232; g.P.iframes=0; } __tick(1); __draw(); if(b.state==='train') sawTrain=true; }
+    if(!sawTrain) throw new Error('the train never swept');
+    if(b.state==='train') throw new Error('train never ended — softlock');   // regression guard for the dir bug
+    if(!(g.P.hp<hp0)) throw new Error('the train did not hit a player on the rail');
+    if(!(g.P.drunk<80)) throw new Error('the train should sober you');
+    console.log('        train swept + ended; drunk 80→'+Math.round(g.P.drunk));
+  });
+  scene('halal boss: throws skewers, ducks behind the cart (shielded)', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle';
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'halal'); const b=g.boss;
+    if(!b||b.arch!=='halal') throw new Error('halal boss did not spawn');
+    __tick(60);
+    let sawSkewer=false;
+    for(let i=0;i<220;i++){ __tick(1); __draw(); if(g.fires.some(f=>f.skewer)) sawSkewer=true; }
+    if(!sawSkewer) throw new Error('the cart man threw no skewers');
+    b.duckCd=1; let ticks=0; while(b.state!=='duck' && ticks++<160){ __tick(1); __draw(); }
+    if(b.state!=='duck') throw new Error('cart man never ducked');
+    const hp0=b.hp; g.P.x=b.x-24; g.P.face=1; g.P.iframes=0;
+    g.connect(b,{dmg:40,stun:10});
+    if(b.hp<hp0) throw new Error('ducked cart man took damage through the cart');
+    console.log('        skewers thrown; ducked = shielded');
+  });
   scene('shop: open, buy every rank of everything', ()=>{
     const g=__G();
     const b=g.BUILDINGS.find(q=>q.kind==='burger');
