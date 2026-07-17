@@ -626,7 +626,7 @@ function stream(){
   // nothing chases you forever — but the boss is never culled (it owns the locked arena)
   ents=ents.filter(e=>e.k==='boss' || (e.x>camX-460 && e.x<camX+W+460));
 }
-let camX=0, camLock=null, t=0, shake=0, hitstop=0;
+let camX=0, camLock=null, t=0, shake=0, hitstop=0, camFlash=0;   // camFlash: the tourist's photo whiteout
 let boss=null, bossDone=0;                 // the current boss entity, and the highest 250m threshold started
 let bossDeaths=0, bossNagged=false;        // deaths in the current boss fight, and whether we've shown the tip
 let dateOn=false, date=null;               // the rhythm date mini-game
@@ -640,7 +640,7 @@ function reset(){
   U={liver:0,hands:0,body:0,chin:0,rep:0,game:0,eyes:0,boots:0,reach:0,knuck:0,hide:0,iron:0,pockets:0}; burgerCost=25;
   P.maxhp=100; P.conf=0;
 
-  ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;
+  ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;camFlash=0;
   boss=null; bossDone=0; bossDeaths=0; bossNagged=false; gauntlet=0; gauntletIx=0; dateOn=false; date=null; $('touch').classList.remove('dating');
   cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[]; props=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
@@ -796,9 +796,9 @@ function spawnWave(T){
 //====================== bosses ======================
 // every 250m the street clears and a giant procedural monster rises. three archetypes,
 // each rolled fresh from the boss number so no two encounters are the same.
-const BOSS_ARCH=['ratking','bouncer','crawler','deli','subway','halal','auteur'];
+const BOSS_ARCH=['ratking','bouncer','crawler','deli','subway','halal','auteur','tourist'];
 const BOSS_NAME={ratking:'THE RAT KING',bouncer:'THE BOUNCER',crawler:'THE CRAWLER',deli:'THE DELI MAN',
-  subway:'THE TRACK WORKER',halal:'THE CART MAN',auteur:'THE AUTEUR'};
+  subway:'THE TRACK WORKER',halal:'THE CART MAN',auteur:'THE AUTEUR',tourist:'THE TOURIST'};
 const BOSS_PAL={
   ratking:{body:'#4a3a2c',dark:'#2b2016',glow:'#ff5a2e'},
   bouncer:{body:'#3a3d4a',dark:'#22242e',glow:'#ff2e88'},
@@ -807,10 +807,11 @@ const BOSS_PAL={
   subway:{body:'#c96a1e',dark:'#3a3f47',glow:'#ffd23a'}, // safety-orange vest, MTA grey, headlight yellow
   halal:{body:'#c4302b',dark:'#2a2622',glow:'#ff8c1a'},  // red cart, char-grey, flame-orange weak point
   auteur:{body:'#1c1c20',dark:'#0e0e12',glow:'#e23b3b'}, // all black — turtleneck & beret — viewfinder-red eye
+  tourist:{body:'#f0ece0',dark:'#3f8f5a',glow:'#fdf4c8'},// white tee, cargo-shorts green, camera-flash white
 };
 // 'repel' is NOT in the random rotation — it only fires as the mash-punish (see connect()), so no
 // regular move ever tanks your drunk straight to zero. Regular hits sober you a little; heavy hits a lot.
-const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep'],deli:['boot'],subway:['kick'],halal:['skewer'],auteur:['clap','tornado']};
+const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep'],deli:['boot'],subway:['kick'],halal:['skewer'],auteur:['clap','tornado'],tourist:['photo']};
 const bossInv=b=>{                                 // i-frames: can't be traded through
   if(b.state==='intro') return true;
   if(b.arch==='deli'){
@@ -821,6 +822,7 @@ const bossInv=b=>{                                 // i-frames: can't be traded 
   if(b.arch==='subway') return b.state==='retreat'||b.state==='train'||b.state==='climb'||b.state==='wind'||b.state==='attack';   // untouchable while he's down on the tracks
   if(b.arch==='halal')  return b.state==='duck'||b.state==='wind'||b.state==='attack';   // ducked behind the cart = shielded
   if(b.arch==='auteur') return b.state==='wind'||b.state==='attack';   // NB 'tidy' is deliberately vulnerable — that's the opening
+  if(b.arch==='tourist') return b.state==='wind'||b.state==='attack';  // camera up = untouchable; open on the recover
   return b.state==='wind'||b.state==='attack';
 };
 function bossRepel(b){                              // "get away from me" — huge knockback + instant sober
@@ -838,21 +840,22 @@ function genBoss(bn,forceArch){
   const sd=bn*97.31+3.7, H=k=>hsh(sd+k*1.7);
   const N=BOSS_ARCH.length;
   const arch=forceArch||BOSS_ARCH[(bn-1+Math.floor(H(1)*N))%N];   // rotate + roll so every archetype recurs
-  const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2,subway:1.1,halal:0.95,auteur:1.0}[arch];
+  const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2,subway:1.1,halal:0.95,auteur:1.0,tourist:1.05}[arch];
   const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
     x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
     weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,
-    hp:0,maxhp:0, sc: arch==='crawler'?2.6:(arch==='deli'?3.0:(arch==='subway'||arch==='halal'?2.9:(arch==='auteur'?2.9:3.1))),
+    hp:0,maxhp:0, sc: arch==='crawler'?2.6:(arch==='deli'?3.0:(arch==='subway'||arch==='halal'?2.9:(arch==='auteur'||arch==='tourist'?2.9:3.1))),
     segs: arch==='ratking'?4+Math.floor(H(3)*4):3,
     legs: arch==='crawler'?6+Math.floor(H(4)*5):(arch==='ratking'?4:2),
     spd: arch==='crawler'?1.5:(arch==='bouncer'?0.7:(arch==='deli'?0.85:(arch==='halal'?0.8:(arch==='subway'?1.1:(arch==='auteur'?1.0:1.05))))),
     dmg:10,
     phase:null, shots:0, reloadT:0,             // deli-only phase state (ignored by other archetypes)
     trainCd:260, trainX:0, duckCd:210,           // subway train timer / halal duck timer
-    tidyCd:220, buffT:0 };                        // auteur compulsion timer / attack-speed buff
+    tidyCd:220, buffT:0,                          // auteur compulsion timer / attack-speed buff
+    photo:null, busX:0, busPark:0 };              // tourist photo frame + tour-bus position
   b.maxhp=b.hp=Math.round((220+bn*90)*mul*2.4);   // tanky — you have to earn it in the openings
   b.w= arch==='crawler'?46:(arch==='deli'?34:(arch==='halal'?40:32)); b.d=18;
-  b.h= arch==='bouncer'?98:(arch==='deli'?92:(arch==='subway'?86:(arch==='halal'?82:(arch==='auteur'?86:76))));
+  b.h= arch==='bouncer'?98:(arch==='deli'?92:(arch==='subway'?86:(arch==='halal'?82:(arch==='auteur'?86:(arch==='tourist'?84:76)))));
   return b;
 }
 
@@ -862,6 +865,8 @@ function spawnBoss(bn,forceArch){
   for(const e of ents) if(!e.dead){ e.dead=1; e.vx=(e.x<b.x?-1:1)*3; }   // the street clears — scatter any stragglers
   for(const cw of crowd) cw.joinT=0;                          // and nobody new joins in
   boss=b; ents.push(b); bossDeaths=0; bossNagged=false;       // fresh encounter, fresh death count
+  if(b.arch==='tourist'){ b.busPark=camLock+W*0.5; b.busX=camLock+W+300;   // the tour bus rolls in and parks across the street
+    say(b.x,b.z-72,'GET A PHOTO?',b.pal.glow); }
   for(const g of GATES) if(g.x<P.x && !g.done) g.done=true;   // no gate wave stacks onto/after the boss
   if(b.arch==='deli'){                       // he sends the sandwiches out first — beat them to reach him
     b.phase='guard';
@@ -935,6 +940,7 @@ function bossAttack(b,dx,dz,d){
 
 function updateBoss(b){
   b.anim+=0.05; if(b.flash>0)b.flash--; if(b.weakOpen>0)b.weakOpen--; if(b.repelCd>0)b.repelCd--;
+  if(b.arch==='tourist') b.busX += (b.busPark-b.busX)*0.12;   // the bus keeps rolling in during the intro
   const dx=P.x-b.x, dz=P.z-b.z, d=Math.abs(dx);
   if(b.state!=='intro') b.face=dx>0?1:-1;
 
@@ -945,6 +951,7 @@ function updateBoss(b){
   if(b.arch==='subway'){ updateSubway(b,dx,dz,d); return; }
   if(b.arch==='halal'){ updateHalal(b,dx,dz,d); return; }
   if(b.arch==='auteur'){ updateAuteur(b,dx,dz,d); return; }
+  if(b.arch==='tourist'){ updateTourist(b,dx,dz,d); return; }
   if(b.state==='stagger'){ b.st++; b.weakOpen=6; if(b.st>=90){ b.state='idle'; b.cd=16; } return; }
   if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=34){ b.state='idle'; b.cd=rnd(12,34); } return; }   // shorter recovery + cooldown = presses the attack more
   if(b.state==='wind'){ b.st++; if(b.st===1) blip(60,.06);
@@ -1136,6 +1143,38 @@ function updateAuteur(b,dx,dz,d){
     say(b.x,b.z-64,'THIS SET IS A MESS','#e23b3b'); return; }
   if(b.cd<=0){ b.move= Math.random()<0.5?'clap':'tornado';
     b.windLen= b.move==='tornado'?26:16; b.atkLen= b.move==='tornado'?24:22; b.state='wind'; b.st=0; }
+}
+
+// ---- THE TOURIST: steps off a street-blocking tour bus. lines up a shot (viewfinder telegraph),
+//      then the flash HITS everyone in frame. leave the photo's box before the snap to stay safe. ----
+function updateTourist(b,dx,dz,d){
+  const ch=chinAt();
+  if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=30){ b.state='idle'; b.cd=rnd(18,34); } return; }
+  if(b.state==='wind'){ b.st++;                          // AIMING: the viewfinder frames where you're standing NOW
+    if(b.st===1){ b.photo={x:P.x, z:P.z, rw:62, rd:32}; blip(80,.05); }
+    if(b.st>=b.windLen){ b.state='attack'; b.st=0; b.hitDone=false; } return; }
+  if(b.state==='attack'){ b.st++;
+    if(b.move==='photo'){
+      if(b.st===3 && !b.hitDone){                        // SNAP — the flash catches anyone still in frame
+        camFlash=1; shake=8; rumble(300,1,.6,true); blip(950,.05);
+        const f=b.photo;
+        if(f && Math.abs(P.x-f.x)<f.rw && Math.abs(P.z-f.z)<f.rd && P.iframes<=0) hurtPlayer(ch+8,f.x,S_HEAVY);
+        b.hitDone=true; } }
+    else if(b.move==='bonk'){                            // camera to the face if you crowd him
+      if(b.st>8 && b.st<16 && !b.hitDone && Math.abs(P.x-(b.x+b.face*40))<44 && Math.abs(P.z-b.z)<22){ hurtPlayer(ch+4,b.x,S_HEAVY); b.hitDone=true; } }
+    if(b.st>=b.atkLen){ b.state='recover'; b.st=0; b.photo=null; }
+    b.x=clamp(b.x,camLock+30,camLock+W-30); return; }
+  // idle / approach — he wants camera distance, not a hug
+  b.st++;
+  const want=112;
+  if(d>want+18) b.x+=b.face*b.spd; else if(d<want-18) b.x-=b.face*b.spd*0.8;
+  b.z+=clamp(dz,-1,1)*b.spd*0.4; b.z=clamp(b.z,FLOOR_N+8,FLOOR_S);
+  b.x=clamp(b.x,camLock+30,camLock+W-30);
+  b.cd-=(P.state==='talk'?2:1);
+  if(b.dmgTaken>b.maxhp*0.15){ b.dmgTaken=0; b.state='recover'; b.st=0; shake=6; say(b.x,b.z-70,'STAGGERED',b.pal.glow); return; }
+  if(b.cd<=0){ const close=d<58; b.move=close?'bonk':'photo';
+    b.windLen= close?12:30; b.atkLen= close?24:14; b.state='wind'; b.st=0;
+    if(!close) say(b.x,b.z-72,'SAY CHEESE!',b.pal.glow); }
 }
 
 //====================== combat ======================
@@ -1569,6 +1608,7 @@ function update(){
     rumble(460, k*0.30, k*0.14); }
 
   //---- meters
+  if(camFlash>0) camFlash-=0.10;                 // the photo whiteout fades
   P.drunk=Math.max(0,P.drunk-0.006);
   // confidence bleeds all the time — you top it back up by chatting up low-key women (easy, safe).
   // REP (confFloor) sets the level it can never drop below.
@@ -2280,6 +2320,26 @@ function drawBoss(b){
       ctx.strokeRect(sx-14,gy-b.h*S*G+bob,28,b.h*S*G); ctx.globalAlpha=1; }
     glowBlob(0,15,3.0);                                  // chest (weak point)
   }
+  else if(b.arch==='tourist'){
+    const aiming=b.state==='wind', snap=b.state==='attack'&&b.move==='photo'&&b.st<3;
+    const camUp = aiming||snap||b.state==='recover';
+    R(-5,0,6,9,'#e8e2d4'); R(5,0,6,9,'#e8e2d4');         // white socks/sneakers
+    R(-5,7,6,3,'#c9c2ae'); R(5,7,6,3,'#c9c2ae');
+    R(-5,9,6,9,dark); R(5,9,6,9,dark);                   // cargo shorts (green)
+    R(0,17,16,13,body);                                  // white tee (with a loud print stripe)
+    R(0,20,16,2,'#e0563a'); R(0,24,16,2,'#3a7fd5');
+    R(0,29,9,7,'#e8c9a8');                               // sunburned face
+    R(-2.4,32,1.4,1.4,'#1a1620'); R(2.4,32,1.4,1.4,'#1a1620');   // eyes (behind the cap)
+    R(0,36,11,4,'#d54a44'); R(-5,35,5,2,'#d54a44');      // red baseball cap + brim
+    // camera: down at his chest, or up to his eye when he shoots
+    if(camUp){ R(9,29,7,6,'#22242e'); R(12,30,3,3,glow); // lens toward you
+      if(snap){ glowBlob(14,31,4.2); } }                 // FLASH
+    else { R(3,18,7,5,'#22242e'); R(5,19,3,3,'#3a3f47'); }  // camera hanging on the strap
+    if(aiming){ ctx.globalAlpha=.5+.5*Math.sin(t*.6); ctx.fillStyle=glow;
+      ctx.font='bold 9px "JetBrains Mono",monospace'; ctx.textAlign='center';
+      ctx.fillText('📷', sx, gy-(b.h+4)*G+bob); ctx.globalAlpha=1; }
+    glowBlob(0,17,3.0);                                  // chest (weak point)
+  }
   else {                                                 // crawler
     ctx.strokeStyle=dark; ctx.lineWidth=2.2*S*G;
     for(let i=0;i<b.legs;i++){ const side=i%2?1:-1, idx=Math.floor(i/2);
@@ -2385,6 +2445,47 @@ function drawTrain(){
   ctx.globalCompositeOperation='lighter'; ctx.fillStyle=b.pal.glow; ctx.globalAlpha=.8;
   ctx.beginPath(); ctx.ellipse(tx+dir*(len/2+10), ty-16, 26,20,0,0,7); ctx.fill();
   ctx.globalAlpha=.25; for(let i=0;i<5;i++) ctx.fillRect(tx-dir*(len/2+i*30), ty-40, 18,52);
+  ctx.restore(); ctx.globalAlpha=1;
+}
+
+// the tour bus — parks across the back of the street for a TOURIST fight (a long backdrop)
+function drawBus(){
+  const b=boss; if(!b||b.arch!=='tourist') return;
+  const bx=b.busX-camX, by=FLOOR_N-6, len=320, h=54;
+  ctx.save();
+  ctx.fillStyle='#e6c23a'; ctx.fillRect(bx-len/2, by-h, len, h);          // yellow bus body
+  ctx.fillStyle='#c9a52c'; ctx.fillRect(bx-len/2, by-8, len, 8);          // lower panel
+  ctx.fillStyle='#2b2f36'; ctx.fillRect(bx-len/2, by-h, len, 6);          // roof trim
+  ctx.fillStyle='#5aa0c8';                                                 // tinted windows
+  for(let i=0;i<9;i++) ctx.fillRect(bx-len/2+14+i*34, by-h+12, 26, 20);
+  ctx.fillStyle='#141822'; ctx.fillRect(bx-len/2+6, by-h+12, 22, 26);     // door
+  ctx.fillStyle='#1a1a20';                                                 // wheels
+  ctx.beginPath(); ctx.arc(bx-len*0.33, by, 9,0,7); ctx.arc(bx+len*0.33, by, 9,0,7); ctx.fill();
+  ctx.fillStyle='#3f8f5a'; ctx.font='bold 11px "Bebas Neue",sans-serif'; ctx.textAlign='center';
+  ctx.fillText('CITY  TOURS', bx, by-h+9);                                 // livery
+  ctx.restore(); ctx.textAlign='left';
+}
+
+// the tourist's viewfinder — the danger box he's about to shoot. leave it before the snap.
+function drawPhotoFrame(){
+  const b=boss; if(!b||b.arch!=='tourist'||b.state!=='wind'||!b.photo) return;
+  const f=b.photo, x=f.x-camX, prog=clamp(b.st/b.windLen,0,1);
+  const L=x-f.rw, Tp=f.z-f.rd, w=f.rw*2, hh=f.rd*2;
+  ctx.save();
+  const inFrame = Math.abs(P.x-f.x)<f.rw && Math.abs(P.z-f.z)<f.rd;
+  ctx.fillStyle = inFrame ? 'rgba(255,60,60,'+(0.10+0.14*Math.sin(t*0.5))+')' : 'rgba(253,244,200,0.06)';
+  ctx.fillRect(L,Tp,w,hh);
+  ctx.strokeStyle=b.pal.glow; ctx.lineWidth=1; ctx.globalAlpha=0.5+0.4*Math.sin(t*0.6);
+  const c=12; // corner brackets
+  ctx.beginPath();
+  ctx.moveTo(L,Tp+c); ctx.lineTo(L,Tp); ctx.lineTo(L+c,Tp);
+  ctx.moveTo(L+w-c,Tp); ctx.lineTo(L+w,Tp); ctx.lineTo(L+w,Tp+c);
+  ctx.moveTo(L+w,Tp+hh-c); ctx.lineTo(L+w,Tp+hh); ctx.lineTo(L+w-c,Tp+hh);
+  ctx.moveTo(L+c,Tp+hh); ctx.lineTo(L,Tp+hh); ctx.lineTo(L,Tp+hh-c);
+  ctx.stroke();
+  // focus reticle closing in on the snap
+  ctx.globalAlpha=0.7; const r=3+(1-prog)*10;
+  ctx.beginPath(); ctx.moveTo(x-r,f.z); ctx.lineTo(x+r,f.z); ctx.moveTo(x,f.z-r); ctx.lineTo(x,f.z+r); ctx.stroke();
   ctx.restore(); ctx.globalAlpha=1;
 }
 
@@ -2648,6 +2749,7 @@ function render(){
   const sh=shake*OPT.shake;
   if(sh>1) ctx.translate(rnd(-sh,sh),rnd(-sh,sh));
   bg();
+  drawBus();                                     // the tour bus parks across the back of the street
   const list=[];
   for(const cw of crowd) list.push({z:cw.z,f:()=>drawCrowd(cw)});
   for(const c of cans) if(!c.dead) list.push({z:c.z,f:()=>drawCan(c)});
@@ -2663,6 +2765,7 @@ function render(){
     ctx.fillRect(p.x-camX,p.z-p.y,2,2); } ctx.globalAlpha=1;
   drawFires();
   drawTrain();
+  drawPhotoFrame();                              // the tourist's viewfinder telegraph
   drawLitter();
   drawCars();
 
@@ -2681,6 +2784,7 @@ function render(){
     ctx.fillStyle='#000'; ctx.fillText(f.txt,f.x-camX+1,f.z-f.y+1);
     ctx.fillStyle=f.col; ctx.fillText(f.txt,f.x-camX,f.z-f.y); } ctx.globalAlpha=1;
   ctx.restore();
+  if(camFlash>0){ ctx.fillStyle='rgba(255,255,255,'+clamp(camFlash,0,1)*0.85+')'; ctx.fillRect(0,0,W,H); }  // photo whiteout
   hud();
 
   composite();

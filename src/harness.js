@@ -269,6 +269,25 @@ if(!err){
     if(!(b.hp<hp0)) throw new Error('the tidy window must be vulnerable');
     console.log('        clap + tornado + tidy-window-open ok');
   });
+  scene('tourist boss: bus parks, photo hits in-frame and misses out-of-frame', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle';
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'tourist'); const b=g.boss;
+    if(!b||b.arch!=='tourist') throw new Error('tourist did not spawn');
+    for(let i=0;i<60;i++){ __tick(1); __draw(); }
+    if(Math.abs(b.busX-b.busPark)>50) throw new Error('the tour bus never parked');
+    b.state='wind'; b.st=0; b.move='photo'; b.windLen=30; b.photo=null; g.P.iframes=0;
+    const hp0=g.P.hp;
+    for(let i=0;i<50;i++){ __tick(1); __draw(); }
+    if(!(g.P.hp<hp0)) throw new Error('in-frame photo did no damage');
+    g.P.hp=g.P.maxhp; g.P.z=300; g.P.iframes=0;
+    b.state='wind'; b.st=0; b.move='photo'; b.windLen=30; b.photo=null; __tick(2);
+    const f=b.photo, safeZ=f.z-f.rd-10, hp1=g.P.hp;
+    for(let i=0;i<50;i++){ g.P.z=safeZ; g.P.iframes=0; __tick(1); __draw(); }
+    if(g.P.hp<hp1) throw new Error('out-of-frame still ate the photo');
+    console.log('        bus parked; in-frame flashed, out-of-frame safe');
+  });
   scene('scam scales with confidence: broke on a 10/10 empties pockets, confident keeps it', ()=>{
     const g=__G(); g.clearEnts(); g.setCamLock(0);     // camLock non-null suppresses the 'her man' boss side-effect
     g.P.z=300; g.P.drunk=0;
