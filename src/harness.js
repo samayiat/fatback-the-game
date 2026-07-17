@@ -81,6 +81,7 @@ const driver = `
    get boss(){return boss}, get camLock(){return camLock},
    get date(){return date}, get dateOn(){return dateOn},
    spawn:(e)=>ents.push(e), clearEnts:()=>{ ents.length=0; },
+   setCamLock:(v)=>{ camLock=v; camX=v; },
    rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
    genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
@@ -197,6 +198,25 @@ if(!err){
     if(!n.talked) throw new Error('bombed date did not resolve');
     if(!n.blown) throw new Error('bombing should blow her off');
     __draw();
+  });
+  scene('deli boss: henchmen → boot → gun, renders every phase', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle';
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'deli'); const b=g.boss;
+    if(!b||b.arch!=='deli') throw new Error('deli did not spawn');
+    for(let i=0;i<60;i++){ __tick(1); __draw(); }               // intro + guard
+    if(g.ents.filter(e=>e.k==='sammich'&&!e.dead).length<3) throw new Error('deli spawned no henchmen');
+    if(b.phase!=='guard') throw new Error('deli not in guard phase');
+    for(const e of g.ents) if(e.k==='sammich') e.dead=1;         // beat the sandwiches
+    for(let i=0;i<40;i++){ __tick(1); __draw(); }               // boot phase
+    if(b.phase!=='boot') throw new Error('deli did not enter boot phase, got '+b.phase);
+    b.hp=Math.round(b.maxhp*0.2);                                // trip the gun
+    let sawBullet=false;
+    for(let i=0;i<200;i++){ __tick(1); __draw(); if(g.fires.some(f=>f.bullet)) sawBullet=true; }
+    if(b.phase!=='gun') throw new Error('deli did not pull the gun under 25%');
+    if(!sawBullet) throw new Error('gun phase fired no bullets');
+    console.log('        deli guard→boot→gun ok; bullets sprayed');
   });
   scene('shop: open, buy every rank of everything', ()=>{
     const g=__G();
