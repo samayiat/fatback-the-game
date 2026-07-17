@@ -711,6 +711,11 @@ function vamp(x,z,fromDoor,forceElite){
   state:fromDoor?'enter':'walk',st:0,anim:0,tok:false,hitstun:0,dead:0,cd:rnd(40,120),
   enterZ:z+rnd(26,60)}; }
 
+// sandwich monster — the deli's henchmen. small, hungry, driven by the generic enemy AI.
+function sammich(x,z){ return {k:'sammich',x,z,y:0,vy:0,vx:0,
+  hp:34,maxhp:34, w:15,d:11,h:26, spd:0.8, dmg:8,
+  flash:0,face:-1,state:'walk',st:0,anim:0,tok:false,hitstun:0,dead:0,cd:rnd(24,70)}; }
+
 // a bystander becomes a real enemy: lit, health bar, walks at you. that's the readable difference.
 function aggro(cw,punched){
   if(cw.gone) return;
@@ -773,15 +778,26 @@ function spawnWave(T){
 //====================== bosses ======================
 // every 250m the street clears and a giant procedural monster rises. three archetypes,
 // each rolled fresh from the boss number so no two encounters are the same.
-const BOSS_ARCH=['ratking','bouncer','crawler'];
-const BOSS_NAME={ratking:'THE RAT KING',bouncer:'THE BOUNCER',crawler:'THE CRAWLER'};
+const BOSS_ARCH=['ratking','bouncer','crawler','deli'];
+const BOSS_NAME={ratking:'THE RAT KING',bouncer:'THE BOUNCER',crawler:'THE CRAWLER',deli:'THE DELI MAN'};
 const BOSS_PAL={
   ratking:{body:'#4a3a2c',dark:'#2b2016',glow:'#ff5a2e'},
   bouncer:{body:'#3a3d4a',dark:'#22242e',glow:'#ff2e88'},
   crawler:{body:'#2f4a30',dark:'#182a18',glow:'#c9ff3a'},
+  deli:{body:'#d8d2c0',dark:'#9a3d3f',glow:'#ffb03a'},   // white apron, meat-red, pastrami-gold weak point
 };
-const BOSS_MOVES={ratking:['fire','sweep','charge','repel'],bouncer:['stomp','hook','charge','repel'],crawler:['charge','stab','sweep','repel']};
-const bossInv=b=>b.state==='wind'||b.state==='attack'||b.state==='intro';   // i-frames: can't be traded through
+// 'repel' is NOT in the random rotation — it only fires as the mash-punish (see connect()), so no
+// regular move ever tanks your drunk straight to zero. Regular hits sober you a little; heavy hits a lot.
+const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep'],deli:['boot']};
+const bossInv=b=>{                                 // i-frames: can't be traded through
+  if(b.state==='intro') return true;
+  if(b.arch==='deli'){
+    if(b.phase==='guard') return true;             // his henchmen shield him — clear them first
+    if(b.phase==='gun') return b.state!=='reload'; // strapped: only open while he's reloading
+    return b.state==='wind'||b.state==='attack'||b.state==='draw';   // boot phase: mid-swing only
+  }
+  return b.state==='wind'||b.state==='attack';
+};
 function bossRepel(b){                              // "get away from me" — huge knockback + instant sober
   const dir=Math.sign(P.x-b.x)||1;
   P.state='down'; P.downT=52; P.iframes=78; P.vy=2.6; P.knockV=dir*8.5; P.x+=dir*12;
@@ -795,18 +811,20 @@ function bossRepel(b){                              // "get away from me" — hu
 
 function genBoss(bn,forceArch){
   const sd=bn*97.31+3.7, H=k=>hsh(sd+k*1.7);
-  const arch=forceArch||BOSS_ARCH[(bn-1+Math.floor(H(1)*3))%3];   // rotate + roll so all three recur
-  const mul={ratking:1,bouncer:1.15,crawler:0.85}[arch];
+  const N=BOSS_ARCH.length;
+  const arch=forceArch||BOSS_ARCH[(bn-1+Math.floor(H(1)*N))%N];   // rotate + roll so every archetype recurs
+  const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2}[arch];
   const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
     x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
     weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,
-    hp:0,maxhp:0, sc: arch==='crawler'?2.6:3.1,
+    hp:0,maxhp:0, sc: arch==='crawler'?2.6:(arch==='deli'?3.0:3.1),
     segs: arch==='ratking'?4+Math.floor(H(3)*4):3,
     legs: arch==='crawler'?6+Math.floor(H(4)*5):(arch==='ratking'?4:2),
-    spd: arch==='crawler'?1.5:(arch==='bouncer'?0.7:1.05),
-    dmg:10 };
+    spd: arch==='crawler'?1.5:(arch==='bouncer'?0.7:(arch==='deli'?0.85:1.05)),
+    dmg:10,
+    phase:null, shots:0, reloadT:0 };   // deli-only phase state (ignored by other archetypes)
   b.maxhp=b.hp=Math.round((220+bn*90)*mul*2.4);   // tanky — you have to earn it in the openings
-  b.w= arch==='crawler'?46:36; b.d=18; b.h= arch==='bouncer'?98:76;
+  b.w= arch==='crawler'?46:(arch==='deli'?34:36); b.d=18; b.h= arch==='bouncer'?98:(arch==='deli'?92:76);
   return b;
 }
 
@@ -817,6 +835,13 @@ function spawnBoss(bn,forceArch){
   for(const cw of crowd) cw.joinT=0;                          // and nobody new joins in
   boss=b; ents.push(b);
   for(const g of GATES) if(g.x<P.x && !g.done) g.done=true;   // no gate wave stacks onto/after the boss
+  if(b.arch==='deli'){                       // he sends the sandwiches out first — beat them to reach him
+    b.phase='guard';
+    const nH=3;
+    for(let i=0;i<nH;i++){ const hx=clamp(b.x+b.face*(48+i*30), camLock+40, camLock+W-40);   // out front, between you and him
+      ents.push(sammich(hx, FLOOR_N+18+i*22)); }
+    say(b.x,b.z-72,'ORDER UP!',b.pal.glow);
+  }
   shake=12; rumble(760,1,.7,true); blip(60,.1);
   say(P.x,P.z-54,'BOSS','#ff2e88'); say(b.x,b.z-84,b.name,b.pal.glow);
   P.iframes=Math.max(P.iframes,54);        // the entrance isn't a free hit on you
@@ -828,11 +853,12 @@ function forceBoss(){
   if(camLock!==null || boss) return;
   gauntletIx++;
   camLock=Math.max(0,P.x-170);
-  spawnBoss(gauntletIx, BOSS_ARCH[(gauntletIx-1)%3]);
+  spawnBoss(gauntletIx, BOSS_ARCH[(gauntletIx-1)%BOSS_ARCH.length]);
 }
 
 function killBoss(b){
   b.dead=1; b.state='dead'; b.tok=false;
+  fires=fires.filter(f=>!f.foe);            // his last shots die with him
   P.conf=Math.min(100,P.conf+20);
   P.hp=Math.min(P.maxhp, P.hp+Math.round(P.maxhp*0.6));   // the reward that lets you keep going
   shake=15; rumble(820,1,1,true);
@@ -842,22 +868,24 @@ function killBoss(b){
   for(let i=0;i<24;i++) puff(b.x+rnd(-60,60),b.z,rnd(0,50),1,b.pal.glow);
 }
 
-function bossHit(reach,zr,dmg){                            // shared melee check for boss attacks
+function bossHit(reach,zr,dmg,sober){                      // shared melee check for boss attacks
   if(boss.hitDone) return;
   if(Math.abs(P.x-(boss.x+boss.face*reach*0.55))<reach && Math.abs(P.z-boss.z)<zr){
-    hurtPlayer(dmg,boss.x); boss.hitDone=true; }
+    hurtPlayer(dmg,boss.x,sober); boss.hitDone=true; }
 }
+// SOBER tiers: light pokes rattle you a little (10%), heavy signature hits crack you sober (50%).
+const S_LIGHT=10, S_HEAVY=50;
 function bossAttack(b,dx,dz,d){
   const m=b.move, ch=chinAt();
   if(m==='fire'){ if(b.st>6 && b.st<34 && b.st%2===0) emitFire(b); }
   else if(m==='stomp'){
-    if(b.st===12){ shake=11; rumble(320,1,.5,true);        // slam → ground shockwave
-      if(P.y<26 && Math.abs(P.x-b.x)<140){ hurtPlayer(ch+8,b.x); }
+    if(b.st===12){ shake=11; rumble(320,1,.5,true);        // slam → ground shockwave (heavy)
+      if(P.y<26 && Math.abs(P.x-b.x)<140){ hurtPlayer(ch+8,b.x,S_HEAVY); }
       for(let i=0;i<16;i++) puff(b.x+rnd(-46,46),b.z,rnd(0,6),1,'#6b6478'); } }
-  else if(m==='charge'){ if(b.st<30){ b.x+=b.face*b.spd*3.0; bossHit(42,18,ch+4); } }
-  else if(m==='hook'){ if(b.st>8 && b.st<18) bossHit(54,18,ch+6); }
-  else if(m==='stab'){ if(b.st>8 && b.st<16) bossHit(30,22,ch+4); }
-  else if(m==='sweep'){ if(b.st>6 && b.st<20) bossHit(60,20,ch+2); }
+  else if(m==='charge'){ if(b.st<30){ b.x+=b.face*b.spd*3.0; bossHit(42,18,ch+4,S_HEAVY); } }
+  else if(m==='hook'){ if(b.st>8 && b.st<18) bossHit(54,18,ch+6,S_HEAVY); }
+  else if(m==='stab'){ if(b.st>8 && b.st<16) bossHit(30,22,ch+4,S_LIGHT); }
+  else if(m==='sweep'){ if(b.st>6 && b.st<20) bossHit(60,20,ch+2,S_LIGHT); }
   else if(m==='repel'){ if(b.st===8){ shake=9; rumble(320,.9,.6,true);   // "get away from me" burst
     for(let i=0;i<14;i++) puff(b.x+rnd(-40,40),b.z,rnd(0,32),1,b.pal.glow);
     if(Math.abs(P.x-b.x)<92 && P.y<32 && b.repelCd<=0) bossRepel(b); } }
@@ -871,6 +899,7 @@ function updateBoss(b){
   if(b.state==='intro'){ b.st++; b.rise=Math.max(0,1-b.st/40);
     if(b.st===1){ shake=10; } if(b.st>=46){ b.state='idle'; b.cd=24; } return; }
   if(b.state==='dead'){ b.st++; return; }
+  if(b.arch==='deli'){ updateDeli(b,dx,dz,d); return; }   // the deli man runs his own three-phase fight
   if(b.state==='stagger'){ b.st++; b.weakOpen=6; if(b.st>=90){ b.state='idle'; b.cd=16; } return; }
   if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=34){ b.state='idle'; b.cd=rnd(12,34); } return; }   // shorter recovery + cooldown = presses the attack more
   if(b.state==='wind'){ b.st++; if(b.st===1) blip(60,.06);
@@ -895,6 +924,61 @@ function updateBoss(b){
   }
 }
 
+// ---- THE DELI MAN: guard (henchmen) → boot melee → strapped (Galaga gun) ----
+function updateDeli(b,dx,dz,d){
+  const ch=chinAt();
+  const hench=ents.filter(e=>e.k==='sammich'&&!e.dead).length;
+  // phase transitions
+  if(b.phase==='guard' && hench===0){ b.phase='boot'; b.state='idle'; b.cd=18; b.move='boot';
+    say(b.x,b.z-90,'NOW YOU. TIMBS.',b.pal.glow); shake=9; rumble(420,1,.7,true); }
+  if(b.phase==='boot' && b.hp<=b.maxhp*0.25){ b.phase='gun'; b.state='draw'; b.st=0; b.shots=0;
+    say(b.x,b.z-90,'STRAPPED!','#ff2e88'); shake=13; rumble(620,1,.9,true); }
+
+  if(b.phase==='guard'){
+    b.weakOpen=0; b.move='guard';
+    if(d>150) b.x+=b.face*b.spd*0.5;                 // shuffles to stay behind the sandwiches
+    b.x=clamp(b.x,camLock+40,camLock+W-30);
+    if(t%110===0) say(b.x,b.z-70,['GET THRU THEM','THEY HUNGRY','FRESH CUT'][Math.floor(Math.random()*3)],b.pal.glow);
+    return;
+  }
+  if(b.phase==='boot'){
+    if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=30){ b.state='idle'; b.cd=rnd(16,32); } return; }
+    if(b.state==='wind'){ b.st++; if(b.st===1) blip(60,.06); if(b.st>=24){ b.state='attack'; b.st=0; b.hitDone=false; } return; }
+    if(b.state==='attack'){ b.st++;
+      if(b.st===12 && !b.hitDone){ shake=8; rumble(320,1,.6,true);   // the boot comes down — heavy, sobering
+        if(Math.abs(P.x-(b.x+b.face*46))<52 && Math.abs(P.z-b.z)<26 && P.y<40){ hurtPlayer(ch+8,b.x,S_HEAVY); }
+        for(let i=0;i<10;i++) puff(b.x+b.face*46,b.z,rnd(0,10),1,'#6b6478'); b.hitDone=true; }
+      if(b.st>=30){ b.state='recover'; b.st=0; }
+      b.x=clamp(b.x,camLock+30,camLock+W-30); return; }
+    // idle / approach
+    b.st++;
+    if(d>52) b.x+=b.face*b.spd;
+    b.z+=clamp(dz,-1,1)*b.spd*0.4; b.z=clamp(b.z,FLOOR_N,FLOOR_S);
+    b.x=clamp(b.x,camLock+30,camLock+W-30);
+    b.cd-=(P.state==='talk'?2:1);
+    if(b.dmgTaken>b.maxhp*0.15){ b.dmgTaken=0; b.state='recover'; b.st=0;
+      shake=6; rumble(220,.6,.5,true); say(b.x,b.z-70,'STAGGERED',b.pal.glow); return; }
+    if(b.cd<=0){ b.move='boot'; b.state='wind'; b.st=0; }
+    return;
+  }
+  // phase === 'gun' — he backs to the wall and sprays the whole screen, Galaga-style
+  b.x=clamp(b.x, camLock+W-96, camLock+W-44);
+  if(b.state==='draw'){ b.st++; b.weakOpen=0;
+    if(b.st>=26){ b.state='fire'; b.st=0; b.shots=0; } return; }
+  if(b.state==='reload'){ b.st++; b.weakOpen=6;             // OPEN: he's vulnerable until the mag's back in
+    if(b.st===1){ say(b.x,b.z-84,'RELOADING','#3ad1ff'); blip(300,.05); }
+    if(b.st>=90){ b.state='fire'; b.st=0; b.shots=0; } return; }
+  // firing
+  b.st++; b.weakOpen=0;
+  if(b.st%5===0 && b.shots<30){
+    b.shots++;
+    const row=FLOOR_N + ((b.shots*53)%(FLOOR_S-FLOOR_N+1));  // sweep the depth band like a bullet curtain
+    fires.push({x:b.x+b.face*18, z:row, y:22, vx:b.face*6.4, vz:0, vy:0, r:5, life:130, max:130, foe:true, bullet:true, sober:S_LIGHT});
+    blip(170,.03); if(b.shots%6===0) shake=2;
+  }
+  if(b.shots>=30){ b.state='reload'; b.st=0; }             // mag empty → reload window
+}
+
 //====================== combat ======================
 function atkBox(){ const reach = (P.step===3?34:30)+U.reach*6;   // ~30px forward; REACH extends it
   return {x:P.x+P.face*reach/2, z:P.z, rw:reach/2, rd:18+U.reach*3}; }   // right in front of you
@@ -904,9 +988,10 @@ function connect(e,s){
   const crit=Math.random()<critChance();
   const wp=(e.k==='boss'&&e.weakOpen>0)?2.4:1;     // land your string in the exposed window
   const dmg = s.dmg*(1+P.conf/200)*P.dmgMul*dmgUp()*(crit?2.4+U.knuck*0.7:1)*wp;   // KNUCKLES: fatter crits
-  if(e.k==='boss' && bossInv(e)){                  // mid-move i-frames: NO damage, and it shoves you off
+  if(e.k==='boss' && bossInv(e)){                  // mid-move i-frames: NO damage
     e.flash=4; blip(150,.04);
-    if(e.repelCd<=0) bossRepel(e);
+    if(e.arch==='deli' && e.phase==='guard'){ say(P.x,P.z-30,'BEAT HIS HENCHMEN','#ffb545'); }  // a clang off the deli's shield — no repel
+    else if(e.repelCd<=0) bossRepel(e);            // pressuring a real i-frame gets you shoved off + sobered
     return crit;
   }
   e.hp-=dmg;
@@ -987,13 +1072,17 @@ disp.addEventListener('pointerdown', e=>{
 });
 function laneTap(l){ if(dateTap[l]){ dateTap[l]=false; return true; } return false; }
 function startDate(n){
-  const notes=[]; let hitT=DATE_FALL+24;
+  // being drunk makes her a blur: notes scream down and the whole song compresses. blackout ≈ over in ~2s.
+  const dr=Math.min(1,P.drunk/100);
+  const fall=Math.max(15,Math.round(DATE_FALL*(1-dr*0.78)));   // 70 sober → ~15 at full drunk
+  const sp=1-dr*0.80;                                          // beat spacing shrinks with the room
+  const notes=[]; let hitT=fall+18;
   const count=12+Math.floor(Math.random()*5);            // 12–16 notes
   for(let i=0;i<count;i++){
     notes.push({lane:Math.floor(Math.random()*4), hitT, hit:false, miss:false});
-    hitT += (Math.random()<0.22?14:26);                  // ~a beat apart, some quick doubles
+    hitT += Math.max(6,Math.round((Math.random()<0.22?14:26)*sp));   // ~a beat apart, tighter when drunk
   }
-  date={ n, t:0, notes, endT:hitT+34, hits:0, perfect:0, total:count, combo:0, best:0, judge:'', jcol:'#fff', judgeT:0 };
+  date={ n, t:0, notes, endT:hitT+Math.round(30*sp), fall, dr, hits:0, perfect:0, total:count, combo:0, best:0, judge:'', jcol:'#fff', judgeT:0 };
   dateTap=[false,false,false,false];
   dateOn=true; P.state='idle'; P.talkN=n; n.listening=true; P.face=n.x>P.x?1:-1;
   $('touch').classList.add('dating');                    // the note board owns the screen now
@@ -1056,6 +1145,8 @@ function dateRender(){                                    // crisp overlay on th
   const app=Math.min(10, d.n.trueTier+goggles());
   c.font='7px "JetBrains Mono",monospace'; c.fillStyle= app>=9.5?'#ffb545':'#7d7791';
   c.fillText('HER · '+Math.round(app)+'/10      TAP THE LANES ON THE BEAT', W/2, 38);
+  if(d.dr>0.55){ c.fillStyle='#ff2e88'; c.font='bold 8px "JetBrains Mono",monospace';
+    c.fillText(d.dr>0.85?'TOO DRUNK — SHE\'S A BLUR':'YOU\'RE SEEING DOUBLE', W/2, 48); }
 
   const L=dateLayout(), laneW=L.lw, gap=L.gap, x0=L.x0, topY=L.topY, hitY=L.hitY;
   for(let l=0;l<4;l++){ const lx=x0+l*(laneW+gap);
@@ -1067,7 +1158,7 @@ function dateRender(){                                    // crisp overlay on th
   }
   c.lineWidth=1;
   for(const nt of d.notes){ if(nt.hit||nt.miss) continue;
-    const prog=1-(nt.hitT-d.t)/DATE_FALL; if(prog<-0.15||prog>1.25) continue;
+    const prog=1-(nt.hitT-d.t)/d.fall; if(prog<-0.15||prog>1.25) continue;
     const lx=x0+nt.lane*(laneW+gap), y=topY+prog*(hitY-topY);
     c.globalAlpha=clamp(prog+0.25,0.25,1); c.fillStyle=DATE_LANES[nt.lane].col; c.fillRect(lx+5,y-6,laneW-10,12);
     c.fillStyle='rgba(255,255,255,.4)'; c.fillRect(lx+5,y-6,laneW-10,2); c.globalAlpha=1;
@@ -1083,8 +1174,9 @@ function dateRender(){                                    // crisp overlay on th
   c.restore();
 }
 
-function hurtPlayer(dmg,fromX){
+function hurtPlayer(dmg,fromX,sober){
   if(P.iframes>0||OPT.inv) return;
+  if(sober) P.drunk=Math.max(0,P.drunk-sober);   // a real hit rattles you toward sober
   // caught mid-sentence. she watched you get hit and you have nothing to say about it.
   const wasTalking = P.state==='talk';
   if(wasTalking){ dmg*=1.5;
@@ -1428,7 +1520,9 @@ function update(){
   }
 
   //---- fire lives on the pavement for a second after it leaves the mouth
-  for(const f of fires){ f.x+=f.vx; f.z+=f.vz; f.y+=f.vy; f.vx*=0.965; f.r+=0.30; f.life--;
+  for(const f of fires){ f.x+=f.vx; f.z+=f.vz; f.y+=f.vy;
+    if(!f.bullet){ f.vx*=0.965; f.r+=0.30; }             // bullets fly straight and keep their size
+    f.life--;
     if(f.life<0){ f.gone=true; continue; }
     if(f.foe===false){                                 // your fireball — burns whoever it catches
       for(const e of ents){ if(e.dead) continue;
@@ -1443,7 +1537,7 @@ function update(){
       continue;
     }
     if(Math.abs(f.x-P.x)<f.r*0.8+9 && Math.abs(f.z-P.z)<f.r*0.4+9 && P.y<26)
-      hurtPlayer(f.r>7?9:6, f.x);
+      hurtPlayer(f.bullet?7:(f.r>7?9:6), f.x, f.sober||0);
   }
   fires=fires.filter(f=>!f.gone);
 
@@ -1911,6 +2005,32 @@ function drawBoss(b){
     if(winding&&b.move==='fire') glowBlob(30+rear,11+rear*0.5,3.8);  // maw charging fire
     glowBlob(18+rear,15+rear*0.5,2.2); R(17.5+rear,14.5+rear*0.5,2,2,'#ff2e88');  // eye (weak point)
   }
+  else if(b.arch==='deli'){
+    const gun=b.phase==='gun', firing=gun&&b.state==='fire'&&b.st%5<3;
+    R(-5,0,6,13,'#2b2620'); R(5,0,6,13,'#2b2620');       // work pants
+    R(-5,0,7,4,'#caa14a'); R(5,0,7,4,'#caa14a');         // tan timbs on his feet
+    R(0,11,20,16,body);                                  // apron torso
+    R(0,11,20,3,dark);                                   // apron tie / meat stain
+    R(0,20,22,5,dark);                                   // butcher-coat shoulders
+    R(0,26,9,8,'#c98d6a');                               // ruddy face
+    R(-2.4,30,1.6,1.6,'#1a1620'); R(2.4,30,1.6,1.6,'#1a1620');   // eyes
+    R(1,28.5,5,1.6,'#5a4636');                           // mustache
+    R(0,33,10,4,'#eef0ee');                              // paper hat
+    if(b.phase==='boot'){
+      const raise= b.state==='wind'? 12+b.st*0.5 : b.state==='attack'? Math.max(-6,12-b.st*1.4) : 6;
+      R(12,15,6,8,body);                                 // swinging arm
+      R(16,14+raise,9,11,'#caa14a');                     // the timberland boot
+      R(19,14+raise-2,5,4,'#8a6a24');                    // toe cap
+      R(13,14+raise+9,12,3,'#6a4e18');                   // ridged sole
+    } else if(gun){
+      R(13,16,10,4,body);                                // extended arm
+      R(20,16,6,4,'#22242e');                            // pistol
+      if(firing){ glowBlob(26,17,3.2); R(24,16,4,3,'#ffd23a'); }   // muzzle flash
+    } else {
+      R(-11,15,6,9,body); R(11,15,6,9,body);             // both arms out (guard)
+    }
+    glowBlob(0,17,3.4);                                  // gut (weak point)
+  }
   else {                                                 // crawler
     ctx.strokeStyle=dark; ctx.lineWidth=2.2*S*G;
     for(let i=0;i<b.legs;i++){ const side=i%2?1:-1, idx=Math.floor(i/2);
@@ -1946,13 +2066,48 @@ function drawBossBar(){
   if(b.flash>0){ ctx.fillStyle='#fff'; ctx.globalAlpha=b.flash/8; ctx.fillRect(bx,by+1,bw,5); ctx.globalAlpha=1; }
   ctx.fillStyle='rgba(11,10,16,.5)'; for(let i=1;i<20;i++) ctx.fillRect(bx+bw/20*i,by+1,1,5);
   ctx.strokeStyle=b.pal.glow; ctx.lineWidth=1; ctx.strokeRect(bx-2.5,by+0.5,bw+5,6);
+  if(b.arch==='deli'){                       // tell the player why he won't take damage
+    let note='';
+    if(b.phase==='guard') note='SHIELDED — CLEAR THE HENCHMEN';
+    else if(b.phase==='gun') note = b.state==='reload'?'RELOADING — HIT HIM NOW':'STRAPPED — DODGE THE SPRAY';
+    if(note){ ctx.fillStyle= b.state==='reload'?'#3ad1ff':'#ffb03a';
+      ctx.font='6px "JetBrains Mono",monospace'; ctx.textAlign='center';
+      ctx.fillText(note, W/2, by+15); } }
 }
 
 function drawFires(){
+  // solid bullets (the deli's handgun) — drawn straight, not additive
+  for(const f of fires){ if(!f.bullet) continue; const bx=f.x-camX, by=f.z-f.y;
+    ctx.fillStyle='#ffd23a'; ctx.fillRect(bx-4,by-2,8,4);      // tracer streak
+    ctx.fillStyle='#fff'; ctx.fillRect(bx-1,by-1.5,3,3); }     // hot core
   ctx.globalCompositeOperation='lighter';
-  for(const f of fires){ const a=clamp(f.life/22,0,1)*.85;
+  for(const f of fires){ if(f.bullet) continue; const a=clamp(f.life/22,0,1)*.85;
     ctx.globalAlpha=a; ctx.drawImage(fireC, f.x-camX-f.r, f.z-f.y-f.r*.9, f.r*2, f.r*2); }
   ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
+}
+
+function drawSammich(e){ const sx=e.x-camX, y=e.z-e.y, bob=Math.sin(e.anim*2)*1.6, f=e.face;
+  shadow(e.x,e.z,12);
+  const hit=e.flash>3||e.hitstun>0;
+  const bread=hit?'#fff':'#d9a441', crust=hit?'#eee':'#a9711f';
+  // stubby legs marching
+  const lg=Math.sin(e.anim*3)*2;
+  ctx.fillStyle='#4a3620'; ctx.fillRect(sx-6,y-6,3,6+lg); ctx.fillRect(sx+3,y-6,3,6-lg);
+  // bottom bun
+  ctx.fillStyle=crust; ctx.fillRect(sx-10,y-18+bob,20,6);
+  // fillings
+  ctx.fillStyle='#4faa4a'; ctx.fillRect(sx-11,y-21+bob,22,3);   // lettuce
+  ctx.fillStyle='#a83c3c'; ctx.fillRect(sx-10,y-24+bob,20,4);   // meat
+  ctx.fillStyle='#e8c33a'; ctx.fillRect(sx-9,y-26+bob,18,2);    // cheese
+  // top bun (domed)
+  ctx.fillStyle=bread; ctx.beginPath(); ctx.moveTo(sx-11,y-25+bob);
+  ctx.quadraticCurveTo(sx,y-37+bob,sx+11,y-25+bob); ctx.closePath(); ctx.fill();
+  // sesame + angry eyes
+  ctx.fillStyle='#fff8e0'; ctx.fillRect(sx-5,y-31+bob,1.5,1.5); ctx.fillRect(sx+3,y-32+bob,1.5,1.5);
+  ctx.fillStyle='#fff'; ctx.fillRect(sx-6,y-30+bob,4,4); ctx.fillRect(sx+2,y-30+bob,4,4);
+  ctx.fillStyle='#1a1010'; ctx.fillRect(sx-5+f,y-29+bob,2,2); ctx.fillRect(sx+3+f,y-29+bob,2,2);
+  if(e.state==='atk'){ ctx.fillStyle='#1a1010'; ctx.fillRect(sx-3,y-21+bob,6,2); }   // gnashing mouth
+  if(e.hp<e.maxhp && !e.dead) ebar(e,18,y-40+bob);
 }
 
 function drawVamp(e){ const sx=e.x-camX;
@@ -2197,7 +2352,7 @@ function render(){
   for(const pr of props) list.push({z:pr.z,f:()=>drawProp(pr)});
   for(const n of npcs) if(Math.abs(n.x-camX-W/2)<W) list.push({z:n.z,f:()=>drawNPC(n)});
   for(const d of drops) list.push({z:d.z,f:()=>drawDrop(d)});
-  for(const e of ents) list.push({z:e.z,f:()=>e.k==='boss'?drawBoss(e):e.k==='rat'?drawRat(e):drawVamp(e)});
+  for(const e of ents) list.push({z:e.z,f:()=>e.k==='boss'?drawBoss(e):e.k==='rat'?drawRat(e):e.k==='sammich'?drawSammich(e):drawVamp(e)});
   list.push({z:P.z,f:drawPlayer});
   list.sort((a,b)=>a.z-b.z);
   for(const o of list) o.f();
