@@ -609,6 +609,7 @@ function stream(){
 }
 let camX=0, camLock=null, t=0, shake=0, hitstop=0;
 let boss=null, bossDone=0;                 // the current boss entity, and the highest 250m threshold started
+let dateOn=false, date=null;               // the rhythm date mini-game
 
 const P={};
 function reset(){
@@ -620,7 +621,7 @@ function reset(){
   P.maxhp=100; P.conf=0;
 
   ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;
-  boss=null; bossDone=0; gauntlet=0; gauntletIx=0;
+  boss=null; bossDone=0; gauntlet=0; gauntletIx=0; dateOn=false; date=null;
   cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[]; props=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
   best=Math.max(best||0, 0);
@@ -938,6 +939,110 @@ function resolveTalk(n){
     } }
 }
 
+//====================== the date — a rhythm mini-game ======================
+// take her out: notes fall in four lanes (the four action buttons); hit the beat.
+// score her right and the flirt pays off; bomb it and she's not feeling it.
+const DATE_LANES=[
+  {act:'PUNCH', key:'J', col:'#3a7fd5'},
+  {act:'JUMP',  key:'K', col:'#5aa84a'},
+  {act:'DRINK', key:'L', col:'#d54a44'},
+  {act:'TALK',  key:'E', col:'#d5b23a'},
+];
+const DATE_FALL=70;                                       // frames a note falls before it should be hit
+function startDate(n){
+  const notes=[]; let hitT=DATE_FALL+24;
+  const count=12+Math.floor(Math.random()*5);            // 12–16 notes
+  for(let i=0;i<count;i++){
+    notes.push({lane:Math.floor(Math.random()*4), hitT, hit:false, miss:false});
+    hitT += (Math.random()<0.22?14:26);                  // ~a beat apart, some quick doubles
+  }
+  date={ n, t:0, notes, endT:hitT+34, hits:0, perfect:0, total:count, combo:0, best:0, judge:'', jcol:'#fff', judgeT:0 };
+  dateOn=true; P.state='idle'; P.talkN=n; n.listening=true; P.face=n.x>P.x?1:-1;
+  blip(520,.06);
+}
+function dateInputs(){ const pad=pollPad();
+  return [ tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH),
+           tap('KeyK')||tapT('B')||(pad&&pad.JUMP),
+           tap('KeyL')||tapT('C')||(pad&&pad.DRINK),
+           tap('KeyE')||tapT('D')||(pad&&pad.TALK) ]; }
+function dateStep(){
+  const d=date; if(!d){ dateOn=false; return; }
+  d.t++; if(d.judgeT>0)d.judgeT--;
+  const WIN=11, PERF=5, press=dateInputs();
+  for(let l=0;l<4;l++){ if(!press[l]) continue;
+    let best=null,bd=1e9;
+    for(const nt of d.notes){ if(nt.hit||nt.miss||nt.lane!==l) continue;
+      const df=Math.abs(nt.hitT-d.t); if(df<bd){bd=df;best=nt;} }
+    if(best && bd<=WIN){ best.hit=true; const p=bd<=PERF; if(p)d.perfect++; d.hits++;
+      d.combo++; d.best=Math.max(d.best,d.combo);
+      d.judge=p?'PERFECT':'GOOD'; d.jcol=p?'#c9d13a':'#ffb545'; d.judgeT=20;
+      blip(p?740:520,.05); if(OPT.rumble)rumble(70,.25,.4,true);
+    } else { d.judge='...'; d.jcol='#5c5670'; d.judgeT=12; d.combo=0; blip(120,.03); }  // off-beat mash
+  }
+  for(const nt of d.notes){ if(!nt.hit&&!nt.miss&&d.t>nt.hitT+WIN){ nt.miss=true; d.combo=0; d.judge='MISS'; d.jcol='#ff2e88'; d.judgeT=20; blip(90,.05); } }
+  if(d.t>d.endT){                                        // that's the date
+    const n=d.n, score=(d.perfect+(d.hits-d.perfect)*0.6)/Math.max(1,d.total);
+    dateOn=false; date=null; if(n)n.listening=false; P.state='idle'; P.talkN=null;
+    resolveDate(n,score);
+  }
+}
+function resolveDate(n,score){
+  if(!n) return;
+  n.talked=true; n.listening=false;
+  const app=Math.min(10,n.trueTier+goggles());
+  if(score<0.5){                                         // bombed it
+    say(n.x,n.z-20,'NOT FEELING IT','#5c5670'); n.blown=true; n.laugh=90;
+    P.conf=Math.max(0,P.conf-5); rumble(220,.5,.4,true); return;
+  }
+  if(n.scammer){                                         // charmed... and robbed (should've read the tell)
+    const lost=Math.floor(P.money*0.4); P.money-=lost;
+    say(n.x,n.z,'-$'+lost,'#ff2e88'); P.dmgMul=1.5; P.dmgT=600; P.scammedBy=n; shake=3;
+    say(P.x,P.z-22,'PLAYED · 1.5x','#ff2e88'); rumble(420,1,.9,true); return;
+  }
+  const cg=Math.round(6+score*12); P.conf=Math.min(100,P.conf+cg);
+  say(n.x,n.z,'+'+cg+' CONF','#c9d13a'); rumble(220,.4,.6,true);
+  if(score>=0.8 && app>=9.5){                            // nailed a real 10/10
+    if(Math.random()<0.4 && camLock===null && !boss){
+      say(n.x,n.z-32,'...HER MAN','#ff2e88'); say(P.x,P.z-30,'INCOMING','#ff5a2e');
+      camLock=Math.max(0,P.x-170); spawnBoss(Math.max(1,Math.floor(P.x/4000)+1));
+    } else { P.fireT=780; say(P.x,P.z-22,'FISTS OF FIRE','#ff5a2e'); rumble(360,.8,.7,true); shake=4; }
+  }
+}
+function dateRender(){                                    // crisp overlay on the display, over the frozen street
+  const c=dctx, d=date; if(!d) return;
+  c.save(); c.textAlign='center';
+  c.fillStyle='rgba(6,4,10,.72)'; c.fillRect(0,0,W,H);
+  c.font='bold 13px "Bebas Neue",sans-serif'; c.fillStyle='#ff2e88'; c.fillText('THE DATE', W/2, 26);
+  const app=Math.min(10, d.n.trueTier+goggles());
+  c.font='7px "JetBrains Mono",monospace'; c.fillStyle= app>=9.5?'#ffb545':'#7d7791';
+  c.fillText('HER · '+Math.round(app)+'/10      HIT THE BEAT', W/2, 38);
+
+  const laneW=46, gap=6, totW=4*laneW+3*gap, x0=W/2-totW/2, topY=58, hitY=250;
+  for(let l=0;l<4;l++){ const lx=x0+l*(laneW+gap);
+    c.fillStyle='rgba(20,16,30,.55)'; c.fillRect(lx,topY,laneW,hitY-topY+30);
+    c.strokeStyle='rgba(255,255,255,.06)'; c.lineWidth=1; c.strokeRect(lx+.5,topY+.5,laneW-1,hitY-topY+30);
+    c.strokeStyle=DATE_LANES[l].col; c.lineWidth=2; c.strokeRect(lx+3,hitY-3,laneW-6,10);   // hit target
+    c.fillStyle=DATE_LANES[l].col; c.font='bold 8px "JetBrains Mono",monospace'; c.fillText(DATE_LANES[l].act, lx+laneW/2, hitY+26);
+    c.fillStyle='#5c5670'; c.font='7px "JetBrains Mono",monospace'; c.fillText(DATE_LANES[l].key, lx+laneW/2, hitY+34);
+  }
+  c.lineWidth=1;
+  for(const nt of d.notes){ if(nt.hit||nt.miss) continue;
+    const prog=1-(nt.hitT-d.t)/DATE_FALL; if(prog<-0.15||prog>1.25) continue;
+    const lx=x0+nt.lane*(laneW+gap), y=topY+prog*(hitY-topY);
+    c.globalAlpha=clamp(prog+0.25,0.25,1); c.fillStyle=DATE_LANES[nt.lane].col; c.fillRect(lx+4,y-5,laneW-8,10);
+    c.fillStyle='rgba(255,255,255,.4)'; c.fillRect(lx+4,y-5,laneW-8,2); c.globalAlpha=1;
+  }
+  if(d.judgeT>0){ c.globalAlpha=clamp(d.judgeT/20,0,1); c.fillStyle=d.jcol;
+    c.font='bold 15px "Bebas Neue",sans-serif'; c.fillText(d.judge, W/2, 150); c.globalAlpha=1; }
+  if(d.combo>1){ c.fillStyle='#e8e2d4'; c.font='bold 10px "JetBrains Mono",monospace'; c.fillText(d.combo+' COMBO', W/2, 172); }
+  const done=d.notes.filter(nt=>nt.hit||nt.miss).length, vibe=done?d.hits/done:0;
+  const vw=180, vx=W/2-vw/2, vy=H-18;
+  c.fillStyle='#231f30'; c.fillRect(vx,vy,vw,6);
+  c.fillStyle= vibe>.75?'#c9d13a':vibe>.45?'#ffb545':'#ff2e88'; c.fillRect(vx,vy,vw*vibe,6);
+  c.textAlign='left'; c.fillStyle='#5c5670'; c.font='7px "JetBrains Mono",monospace'; c.fillText('VIBE',vx,vy-3);
+  c.restore();
+}
+
 function hurtPlayer(dmg,fromX){
   if(P.iframes>0||OPT.inv) return;
   // caught mid-sentence. she watched you get hit and you have nothing to say about it.
@@ -1032,6 +1137,7 @@ function update(){
   for(const b of BUILDINGS) if(b.open>0)b.open--;
   for(const g of GRATES) if(g.open>0)g.open--;
   if(hitstop>0){ hitstop--; return; }
+  if(dateOn){ dateStep(); return; }          // the date freezes the street until it's over
 
   //---- input
   const pad=pollPad();
@@ -1276,7 +1382,7 @@ function update(){
     if(n && n.blown){ say(n.x,n.z-30,'she watched you fall','#5c5670'); }
     else if(n && !n.talked){ const gate=Math.max(0,(n.trueTier-5)*14);
       if(P.conf < gate-goggles()*8){ say(n.x,n.z,"she's not looking",'#5c5670'); }
-      else { P.state='talk'; P.talkT=0; P.talkN=n; n.listening=true; P.face=n.x>P.x?1:-1; }
+      else { startDate(n); }
     }
   }
 
@@ -2078,6 +2184,7 @@ function render(){
   hud();
 
   composite();
+  if(dateOn) dateRender();        // the date overlay stays crisp on top of the warp
 }
 
 function composite(){
