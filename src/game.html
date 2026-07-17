@@ -29,6 +29,8 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch
 #touch{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .2s}
 #touch.on{opacity:var(--touch-op,1)}
 #touch *{pointer-events:auto}
+#touch.dating{opacity:0}               /* hide the stick/buttons — the note board is the input */
+#touch.dating *{pointer-events:none}   /* and let taps fall through to the board */
 /* left half of the screen is the stick zone; the pad spawns under the thumb */
 #stickzone{position:absolute;left:0;top:0;width:50%;height:100%;pointer-events:auto}
 #stick{position:absolute;width:27vmin;height:27vmin;max-width:158px;max-height:158px;
@@ -621,7 +623,7 @@ function reset(){
   P.maxhp=100; P.conf=0;
 
   ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;
-  boss=null; bossDone=0; gauntlet=0; gauntletIx=0; dateOn=false; date=null;
+  boss=null; bossDone=0; gauntlet=0; gauntletIx=0; dateOn=false; date=null; $('touch').classList.remove('dating');
   cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[]; props=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
   best=Math.max(best||0, 0);
@@ -949,6 +951,20 @@ const DATE_LANES=[
   {act:'TALK',  key:'E', col:'#d5b23a'},
 ];
 const DATE_FALL=70;                                       // frames a note falls before it should be hit
+const DATE_LW=56, DATE_GAP=8;                            // lane width + gap (wide enough to tap)
+function dateLayout(){ const totW=4*DATE_LW+3*DATE_GAP;
+  return {lw:DATE_LW, gap:DATE_GAP, totW, x0:W/2-totW/2, topY:56, hitY:250}; }
+let dateTap=[false,false,false,false];                   // lane taps from touching the board directly
+// touching a lane column registers that lane's hit — offsetX is in the canvas's own space, so it's
+// correct in both orientations. #touch.dating turns off the stick/buttons so taps reach the board.
+disp.addEventListener('pointerdown', e=>{
+  if(!dateOn) return; e.preventDefault();
+  const gx=e.offsetX/disp.clientWidth*W, gy=e.offsetY/disp.clientHeight*H;
+  if(gy<44) return;
+  const L=dateLayout(), l=Math.floor((gx-L.x0)/(L.lw+L.gap));
+  if(l>=0 && l<4 && gx>=L.x0-10 && gx<=L.x0+L.totW+10) dateTap[l]=true;
+});
+function laneTap(l){ if(dateTap[l]){ dateTap[l]=false; return true; } return false; }
 function startDate(n){
   const notes=[]; let hitT=DATE_FALL+24;
   const count=12+Math.floor(Math.random()*5);            // 12–16 notes
@@ -957,14 +973,16 @@ function startDate(n){
     hitT += (Math.random()<0.22?14:26);                  // ~a beat apart, some quick doubles
   }
   date={ n, t:0, notes, endT:hitT+34, hits:0, perfect:0, total:count, combo:0, best:0, judge:'', jcol:'#fff', judgeT:0 };
+  dateTap=[false,false,false,false];
   dateOn=true; P.state='idle'; P.talkN=n; n.listening=true; P.face=n.x>P.x?1:-1;
+  $('touch').classList.add('dating');                    // the note board owns the screen now
   blip(520,.06);
 }
 function dateInputs(){ const pad=pollPad();
-  return [ tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH),
-           tap('KeyK')||tapT('B')||(pad&&pad.JUMP),
-           tap('KeyL')||tapT('C')||(pad&&pad.DRINK),
-           tap('KeyE')||tapT('D')||(pad&&pad.TALK) ]; }
+  return [ tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH)||laneTap(0),
+           tap('KeyK')||tapT('B')||(pad&&pad.JUMP) ||laneTap(1),
+           tap('KeyL')||tapT('C')||(pad&&pad.DRINK)||laneTap(2),
+           tap('KeyE')||tapT('D')||(pad&&pad.TALK) ||laneTap(3) ]; }
 function dateStep(){
   const d=date; if(!d){ dateOn=false; return; }
   d.t++; if(d.judgeT>0)d.judgeT--;
@@ -983,6 +1001,7 @@ function dateStep(){
   if(d.t>d.endT){                                        // that's the date
     const n=d.n, score=(d.perfect+(d.hits-d.perfect)*0.6)/Math.max(1,d.total);
     dateOn=false; date=null; if(n)n.listening=false; P.state='idle'; P.talkN=null;
+    $('touch').classList.remove('dating');
     resolveDate(n,score);
   }
 }
@@ -1015,22 +1034,22 @@ function dateRender(){                                    // crisp overlay on th
   c.font='bold 13px "Bebas Neue",sans-serif'; c.fillStyle='#ff2e88'; c.fillText('THE DATE', W/2, 26);
   const app=Math.min(10, d.n.trueTier+goggles());
   c.font='7px "JetBrains Mono",monospace'; c.fillStyle= app>=9.5?'#ffb545':'#7d7791';
-  c.fillText('HER · '+Math.round(app)+'/10      HIT THE BEAT', W/2, 38);
+  c.fillText('HER · '+Math.round(app)+'/10      TAP THE LANES ON THE BEAT', W/2, 38);
 
-  const laneW=46, gap=6, totW=4*laneW+3*gap, x0=W/2-totW/2, topY=58, hitY=250;
+  const L=dateLayout(), laneW=L.lw, gap=L.gap, x0=L.x0, topY=L.topY, hitY=L.hitY;
   for(let l=0;l<4;l++){ const lx=x0+l*(laneW+gap);
-    c.fillStyle='rgba(20,16,30,.55)'; c.fillRect(lx,topY,laneW,hitY-topY+30);
-    c.strokeStyle='rgba(255,255,255,.06)'; c.lineWidth=1; c.strokeRect(lx+.5,topY+.5,laneW-1,hitY-topY+30);
-    c.strokeStyle=DATE_LANES[l].col; c.lineWidth=2; c.strokeRect(lx+3,hitY-3,laneW-6,10);   // hit target
-    c.fillStyle=DATE_LANES[l].col; c.font='bold 8px "JetBrains Mono",monospace'; c.fillText(DATE_LANES[l].act, lx+laneW/2, hitY+26);
-    c.fillStyle='#5c5670'; c.font='7px "JetBrains Mono",monospace'; c.fillText(DATE_LANES[l].key, lx+laneW/2, hitY+34);
+    c.fillStyle='rgba(20,16,30,.5)'; c.fillRect(lx,topY,laneW,hitY-topY+34);          // the tappable column
+    c.strokeStyle='rgba(255,255,255,.06)'; c.lineWidth=1; c.strokeRect(lx+.5,topY+.5,laneW-1,hitY-topY+34);
+    c.strokeStyle=DATE_LANES[l].col; c.lineWidth=2; c.strokeRect(lx+3,hitY-3,laneW-6,11);   // hit target
+    c.fillStyle=DATE_LANES[l].col; c.font='bold 9px "JetBrains Mono",monospace'; c.fillText(DATE_LANES[l].act, lx+laneW/2, hitY+27);
+    c.fillStyle='#5c5670'; c.font='7px "JetBrains Mono",monospace'; c.fillText(DATE_LANES[l].key, lx+laneW/2, hitY+36);
   }
   c.lineWidth=1;
   for(const nt of d.notes){ if(nt.hit||nt.miss) continue;
     const prog=1-(nt.hitT-d.t)/DATE_FALL; if(prog<-0.15||prog>1.25) continue;
     const lx=x0+nt.lane*(laneW+gap), y=topY+prog*(hitY-topY);
-    c.globalAlpha=clamp(prog+0.25,0.25,1); c.fillStyle=DATE_LANES[nt.lane].col; c.fillRect(lx+4,y-5,laneW-8,10);
-    c.fillStyle='rgba(255,255,255,.4)'; c.fillRect(lx+4,y-5,laneW-8,2); c.globalAlpha=1;
+    c.globalAlpha=clamp(prog+0.25,0.25,1); c.fillStyle=DATE_LANES[nt.lane].col; c.fillRect(lx+5,y-6,laneW-10,12);
+    c.fillStyle='rgba(255,255,255,.4)'; c.fillRect(lx+5,y-6,laneW-10,2); c.globalAlpha=1;
   }
   if(d.judgeT>0){ c.globalAlpha=clamp(d.judgeT/20,0,1); c.fillStyle=d.jcol;
     c.font='bold 15px "Bebas Neue",sans-serif'; c.fillText(d.judge, W/2, 150); c.globalAlpha=1; }
