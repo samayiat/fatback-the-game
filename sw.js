@@ -6,7 +6,7 @@
 // next time you're online — the old cache-first worker pinned players to the
 // first build they ever loaded. Static shell assets stay cache-first. Bump
 // VERSION on every shipped change so activate() clears the previous cache.
-const VERSION = 'v9-reach';
+const VERSION = 'v10-fire-econ';
 const CACHE = 'fatback-' + VERSION;
 const SHELL = [
   './',
