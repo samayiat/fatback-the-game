@@ -525,7 +525,7 @@ const SHOPHUE=['#c9d13a','#ffb545','#2fffa8','#e8e2d4'];
 let BUILDINGS=[], CLUBS=[], GRATES=[], GATES=[];
 const MADE=new Set();
 let cans=[], npcs=[], ents=[], drops=[], parts=[], floats=[], fires=[];
-let cars=[], crowd=[], litter=[], steam=[];
+let cars=[], crowd=[], litter=[], steam=[], props=[];
 // one hash seeded by world-x keeps the block identical every run
 function hsh(v){ const x=Math.sin(v*127.1+311.7)*43758.5453; return x-Math.floor(x); }
 const BPM=128, BEATLEN=60*60/BPM;                  // clubs share one pulse so the street has a tempo
@@ -579,8 +579,13 @@ function genChunk(ci){
     }
   }
   for(let i=0;i<3;i++) GRATES.push({x:x0+R()*CHUNK, z:FLOOR_N+32+R()*(FLOOR_S-FLOOR_N-44), open:0, chunk:ci});
-  for(let i=0;i<7;i++) cans.push({x:x0+40+R()*(CHUNK-80), z:FLOOR_N+8+R()*(FLOOR_S-FLOOR_N-16),
-    hp:3, shake:0, dead:false, chunk:ci});
+  // a few breakables, mixed — not a wall of trash cans
+  for(let i=0;i<3;i++){ const ty=['can','box','crate','dumpster'][Math.floor(R()*4)];
+    cans.push({x:x0+40+R()*(CHUNK-80), z:FLOOR_N+8+R()*(FLOOR_S-FLOOR_N-16), type:ty,
+      hp: ty==='dumpster'?5:ty==='crate'?4:3, w: ty==='dumpster'?18:11, shake:0, dead:false, chunk:ci}); }
+  // street furniture against the storefronts — trees, hydrants, benches, boxes, mailboxes
+  for(let i=0;i<4;i++){ const ty=['tree','tree','hydrant','newsbox','bench','mailbox'][Math.floor(R()*6)];
+    props.push({x:x0+30+R()*(CHUNK-60), z:FLOOR_N-2+R()*22, type:ty, ph:R()*9, chunk:ci}); }
   for(let i=0;i<8;i++) crowd.push({x:x0+R()*CHUNK, z:FLOOR_N-9+R()*7, ph:R()*9, blob:true, chunk:ci});
   if(ci>0) GATES.push({x:x0+240+R()*280, done:false, chunk:ci});
   CLUBS=BUILDINGS.filter(b=>b.kind==='club');
@@ -595,7 +600,7 @@ function stream(){
     if(BUILDINGS.some(o=>!keep(o))){
       BUILDINGS=BUILDINGS.filter(keep); CLUBS=BUILDINGS.filter(o=>o.kind==='club');
       GRATES=GRATES.filter(keep); GATES=GATES.filter(keep);
-      cans=cans.filter(keep); crowd=crowd.filter(keep); npcs=npcs.filter(keep);
+      cans=cans.filter(keep); crowd=crowd.filter(keep); npcs=npcs.filter(keep); props=props.filter(keep);
       for(let i=0;i<=cut;i++) MADE.delete(i);   // walk back and it rebuilds the same way
     }
   }
@@ -616,7 +621,7 @@ function reset(){
 
   ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;
   boss=null; bossDone=0; gauntlet=0; gauntletIx=0;
-  cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[];
+  cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[]; props=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
   best=Math.max(best||0, 0);
   stream();
@@ -845,10 +850,10 @@ function updateBoss(b){
   if(b.state!=='intro') b.face=dx>0?1:-1;
 
   if(b.state==='intro'){ b.st++; b.rise=Math.max(0,1-b.st/40);
-    if(b.st===1){ shake=10; } if(b.st>=46){ b.state='idle'; b.cd=44; } return; }
+    if(b.st===1){ shake=10; } if(b.st>=46){ b.state='idle'; b.cd=24; } return; }
   if(b.state==='dead'){ b.st++; return; }
-  if(b.state==='stagger'){ b.st++; b.weakOpen=6; if(b.st>=90){ b.state='idle'; b.cd=28; } return; }
-  if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=46){ b.state='idle'; b.cd=rnd(24,64); } return; }
+  if(b.state==='stagger'){ b.st++; b.weakOpen=6; if(b.st>=90){ b.state='idle'; b.cd=16; } return; }
+  if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=34){ b.state='idle'; b.cd=rnd(12,34); } return; }   // shorter recovery + cooldown = presses the attack more
   if(b.state==='wind'){ b.st++; if(b.st===1) blip(60,.06);
     if(b.st>=b.windLen){ b.state='attack'; b.st=0; b.hitDone=false; } return; }
   if(b.state==='attack'){ b.st++; bossAttack(b,dx,dz,d);
@@ -1219,10 +1224,12 @@ function update(){
   //---- cans
   if(P.state==='punch' && P.st===cStep().su+1){ const b=atkBox();
     for(const c of cans){ if(c.dead)continue;
-      if(Math.abs(b.x-c.x)<22&&Math.abs(b.z-c.z)<14){ c.hp--; c.shake=6; shake=2; blip(140,.05);
-        if(c.hp<=0){ c.dead=true; puff(c.x,c.z,20,10,'#6b6478'); const r=Math.random();
-          if(r<0.34){ for(let i=0;i<3;i++) ents.push(rat(c.x+rnd(-10,10),c.z)); say(c.x,c.z,'RATS','#7d7791'); }
-          else if(r<0.72) drop(c.x,c.z,'cash'); else drop(c.x,c.z,'jameson'); } } } }
+      if(Math.abs(b.x-c.x)<(c.w||11)+11&&Math.abs(b.z-c.z)<14){ c.hp--; c.shake=6; shake=2; blip(140,.05);
+        if(c.hp<=0){ c.dead=true; puff(c.x,c.z,20,c.type==='dumpster'?16:10,'#6b6478'); const r=Math.random();
+          const trash = c.type==='can'||c.type==='dumpster';        // rats nest in the trash, not the crates
+          if(r<0.34 && trash){ for(let i=0;i<(c.type==='dumpster'?4:3);i++) ents.push(rat(c.x+rnd(-10,10),c.z)); say(c.x,c.z,'RATS','#7d7791'); }
+          else if(r<0.66) drop(c.x,c.z,'cash'); else drop(c.x,c.z,'jameson');
+          if(c.type==='dumpster') drop(c.x+rnd(-10,10),c.z,'cash'); } } } }   // dumpsters pay out extra
   for(const c of cans) if(c.shake>0)c.shake--;
 
   //---- drops
@@ -1530,10 +1537,62 @@ function drawLitter(){
 function shadow(x,z,r){ ctx.globalAlpha=.34; ctx.fillStyle='#000';
   ctx.beginPath(); ctx.ellipse(x-camX,z,r,r*.34,0,0,7); ctx.fill(); ctx.globalAlpha=1; }
 
-function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0); shadow(c.x,c.z,13);
-  ctx.fillStyle='#3a3550'; ctx.fillRect(sx-11,c.z-30,22,30);
-  ctx.fillStyle='#4a4468'; ctx.fillRect(sx-13,c.z-34,26,5);
-  ctx.fillStyle='#2a2640'; ctx.fillRect(sx-11,c.z-22,22,2); ctx.fillRect(sx-11,c.z-14,22,2); }
+function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0), z=c.z;
+  shadow(c.x,c.z, c.type==='dumpster'?18:13);
+  if(c.type==='box'){
+    ctx.fillStyle='#7a5a34'; ctx.fillRect(sx-11,z-20,22,20);
+    ctx.fillStyle='#8f6b40'; ctx.fillRect(sx-11,z-20,22,4);            // flaps
+    ctx.fillStyle='#5e441f'; ctx.fillRect(sx-1,z-20,2,20);            // seam
+    ctx.fillStyle='#c9b48a'; ctx.fillRect(sx-8,z-12,16,2);            // packing tape
+  } else if(c.type==='crate'){
+    ctx.fillStyle='#6b4f2a'; ctx.fillRect(sx-12,z-22,24,22);
+    ctx.fillStyle='#4c3818'; ctx.fillRect(sx-12,z-22,24,2); ctx.fillRect(sx-12,z-12,24,2); ctx.fillRect(sx-12,z-2,24,2);
+    ctx.strokeStyle='#4c3818'; ctx.lineWidth=1.5;                     // cross-bracing
+    ctx.beginPath(); ctx.moveTo(sx-11,z-21); ctx.lineTo(sx+11,z-3); ctx.moveTo(sx+11,z-21); ctx.lineTo(sx-11,z-3); ctx.stroke();
+  } else if(c.type==='dumpster'){
+    ctx.fillStyle='#2f5a3a'; ctx.fillRect(sx-18,z-26,36,26);
+    ctx.fillStyle='#264a30'; ctx.fillRect(sx-18,z-14,36,2);
+    ctx.fillStyle='#3a6e48'; ctx.fillRect(sx-20,z-31,40,6);            // lid
+    ctx.fillStyle='#1c3322'; ctx.fillRect(sx-15,z-1,4,2); ctx.fillRect(sx+11,z-1,4,2);   // wheels
+    ctx.fillStyle='#233d2a'; ctx.fillRect(sx-16,z-9,10,4);            // grime
+  } else {                                                            // metal can
+    ctx.fillStyle='#3a3550'; ctx.fillRect(sx-11,z-30,22,30);
+    ctx.fillStyle='#4a4468'; ctx.fillRect(sx-13,z-34,26,5);
+    ctx.fillStyle='#2a2640'; ctx.fillRect(sx-11,z-22,22,2); ctx.fillRect(sx-11,z-14,22,2);
+  }
+}
+
+// decorative street furniture — never breaks, just gives the block character
+function drawProp(pr){ const sx=pr.x-camX, z=pr.z;
+  if(pr.type==='tree'){
+    shadow(pr.x,pr.z,15);
+    ctx.fillStyle='#241a12'; ctx.fillRect(sx-3,z-30,6,30);            // trunk
+    const sway=Math.sin(t*0.02+pr.ph)*2;
+    ctx.fillStyle='#1e3524'; ctx.beginPath(); ctx.ellipse(sx+sway,z-42,17,15,0,0,7); ctx.fill();   // canopy
+    ctx.fillStyle='#2a4a30'; ctx.beginPath(); ctx.ellipse(sx-6+sway,z-46,9,9,0,0,7); ctx.fill();
+    ctx.fillStyle='#345a3b'; ctx.beginPath(); ctx.ellipse(sx+6+sway,z-40,7,7,0,0,7); ctx.fill();
+  } else if(pr.type==='hydrant'){
+    shadow(pr.x,pr.z,7);
+    ctx.fillStyle='#8f2a2a'; ctx.fillRect(sx-4,z-14,8,14);
+    ctx.fillStyle='#a83535'; ctx.fillRect(sx-5,z-16,10,3);
+    ctx.fillStyle='#6e1f1f'; ctx.fillRect(sx-6,z-9,3,3); ctx.fillRect(sx+3,z-9,3,3);
+  } else if(pr.type==='newsbox'){
+    shadow(pr.x,pr.z,8);
+    ctx.fillStyle='#2f5a8f'; ctx.fillRect(sx-7,z-20,14,20);
+    ctx.fillStyle='#3a6ea8'; ctx.fillRect(sx-7,z-20,14,4);
+    ctx.fillStyle='#0b0a10'; ctx.fillRect(sx-5,z-14,10,7);            // window
+  } else if(pr.type==='bench'){
+    shadow(pr.x,pr.z,14);
+    ctx.fillStyle='#2c2419'; ctx.fillRect(sx-14,z-16,28,3);          // back rail
+    ctx.fillStyle='#3a2f22'; ctx.fillRect(sx-14,z-9,28,3);           // seat
+    ctx.fillStyle='#241d14'; ctx.fillRect(sx-12,z-9,3,9); ctx.fillRect(sx+9,z-9,3,9);   // legs
+  } else {                                                            // mailbox
+    shadow(pr.x,pr.z,8);
+    ctx.fillStyle='#2f4a6e'; ctx.fillRect(sx-6,z-15,12,15);
+    ctx.fillStyle='#3a5c88'; ctx.beginPath(); ctx.ellipse(sx,z-15,6,4,0,Math.PI,0); ctx.fill();     // rounded top
+    ctx.fillStyle='#0b0a10'; ctx.fillRect(sx-4,z-9,8,2);             // slot
+  }
+}
 
 // health rides above the head, where you're already looking
 function ebar(e,w,y,elite,long){
@@ -1964,6 +2023,7 @@ function render(){
   const list=[];
   for(const cw of crowd) list.push({z:cw.z,f:()=>drawCrowd(cw)});
   for(const c of cans) if(!c.dead) list.push({z:c.z,f:()=>drawCan(c)});
+  for(const pr of props) list.push({z:pr.z,f:()=>drawProp(pr)});
   for(const n of npcs) if(Math.abs(n.x-camX-W/2)<W) list.push({z:n.z,f:()=>drawNPC(n)});
   for(const d of drops) list.push({z:d.z,f:()=>drawDrop(d)});
   for(const e of ents) list.push({z:e.z,f:()=>e.k==='boss'?drawBoss(e):e.k==='rat'?drawRat(e):drawVamp(e)});
@@ -2144,6 +2204,7 @@ function titleRender(){
   const list=[];
   for(const cw of crowd) list.push({z:cw.z,f:()=>drawCrowd(cw)});
   for(const c of cans) if(!c.dead) list.push({z:c.z,f:()=>drawCan(c)});
+  for(const pr of props) list.push({z:pr.z,f:()=>drawProp(pr)});
   for(const nn of npcs) if(Math.abs(nn.x-camX-W/2)<W) list.push({z:nn.z,f:()=>drawNPC(nn)});
   list.push({z:P.z,f:drawPlayer});
   list.sort((a,b)=>a.z-b.z);
