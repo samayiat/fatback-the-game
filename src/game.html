@@ -606,8 +606,8 @@ function stream(){
       for(let i=0;i<=cut;i++) MADE.delete(i);   // walk back and it rebuilds the same way
     }
   }
-  // nothing chases you forever
-  ents=ents.filter(e=>e.x>camX-460 && e.x<camX+W+460);
+  // nothing chases you forever — but the boss is never culled (it owns the locked arena)
+  ents=ents.filter(e=>e.k==='boss' || (e.x>camX-460 && e.x<camX+W+460));
 }
 let camX=0, camLock=null, t=0, shake=0, hitstop=0;
 let boss=null, bossDone=0;                 // the current boss entity, and the highest 250m threshold started
@@ -780,7 +780,18 @@ const BOSS_PAL={
   bouncer:{body:'#3a3d4a',dark:'#22242e',glow:'#ff2e88'},
   crawler:{body:'#2f4a30',dark:'#182a18',glow:'#c9ff3a'},
 };
-const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep']};
+const BOSS_MOVES={ratking:['fire','sweep','charge','repel'],bouncer:['stomp','hook','charge','repel'],crawler:['charge','stab','sweep','repel']};
+const bossInv=b=>b.state==='wind'||b.state==='attack'||b.state==='intro';   // i-frames: can't be traded through
+function bossRepel(b){                              // "get away from me" — huge knockback + instant sober
+  const dir=Math.sign(P.x-b.x)||1;
+  P.state='down'; P.downT=52; P.iframes=78; P.vy=2.6; P.knockV=dir*8.5; P.x+=dir*12;
+  P.drunk=0;                                        // hit so hard you sober up on the spot
+  P.step=0; P.buf=0; P.hitDone=true;
+  shake=13; hitstop=6; rumble(560,1,.85,true);
+  puff(b.x+dir*b.w, b.z, b.h*0.4, 12, b.pal.glow);
+  say(P.x,P.z-30,'GET OFF ME','#ff2e88'); say(P.x,P.z-46,'SOBERED','#3ad1ff'); blip(70,.14);
+  b.repelCd=44;
+}
 
 function genBoss(bn,forceArch){
   const sd=bn*97.31+3.7, H=k=>hsh(sd+k*1.7);
@@ -788,13 +799,13 @@ function genBoss(bn,forceArch){
   const mul={ratking:1,bouncer:1.15,crawler:0.85}[arch];
   const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
     x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
-    weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,
+    weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,
     hp:0,maxhp:0, sc: arch==='crawler'?2.6:3.1,
     segs: arch==='ratking'?4+Math.floor(H(3)*4):3,
     legs: arch==='crawler'?6+Math.floor(H(4)*5):(arch==='ratking'?4:2),
     spd: arch==='crawler'?1.5:(arch==='bouncer'?0.7:1.05),
     dmg:10 };
-  b.maxhp=b.hp=Math.round((220+bn*90)*mul);
+  b.maxhp=b.hp=Math.round((220+bn*90)*mul*2.4);   // tanky — you have to earn it in the openings
   b.w= arch==='crawler'?46:36; b.d=18; b.h= arch==='bouncer'?98:76;
   return b;
 }
@@ -802,6 +813,8 @@ function genBoss(bn,forceArch){
 function spawnBoss(bn,forceArch){
   const b=genBoss(bn,forceArch);
   b.x=clamp(camLock+W*0.72, camLock+60, camLock+W-60); b.z=FLOOR_N+34; b.face=-1;
+  for(const e of ents) if(!e.dead){ e.dead=1; e.vx=(e.x<b.x?-1:1)*3; }   // the street clears — scatter any stragglers
+  for(const cw of crowd) cw.joinT=0;                          // and nobody new joins in
   boss=b; ents.push(b);
   for(const g of GATES) if(g.x<P.x && !g.done) g.done=true;   // no gate wave stacks onto/after the boss
   shake=12; rumble(760,1,.7,true); blip(60,.1);
@@ -845,10 +858,13 @@ function bossAttack(b,dx,dz,d){
   else if(m==='hook'){ if(b.st>8 && b.st<18) bossHit(54,18,ch+6); }
   else if(m==='stab'){ if(b.st>8 && b.st<16) bossHit(30,22,ch+4); }
   else if(m==='sweep'){ if(b.st>6 && b.st<20) bossHit(60,20,ch+2); }
+  else if(m==='repel'){ if(b.st===8){ shake=9; rumble(320,.9,.6,true);   // "get away from me" burst
+    for(let i=0;i<14;i++) puff(b.x+rnd(-40,40),b.z,rnd(0,32),1,b.pal.glow);
+    if(Math.abs(P.x-b.x)<92 && P.y<32 && b.repelCd<=0) bossRepel(b); } }
 }
 
 function updateBoss(b){
-  b.anim+=0.05; if(b.flash>0)b.flash--; if(b.weakOpen>0)b.weakOpen--;
+  b.anim+=0.05; if(b.flash>0)b.flash--; if(b.weakOpen>0)b.weakOpen--; if(b.repelCd>0)b.repelCd--;
   const dx=P.x-b.x, dz=P.z-b.z, d=Math.abs(dx);
   if(b.state!=='intro') b.face=dx>0?1:-1;
 
@@ -874,8 +890,8 @@ function updateBoss(b){
   if(b.cd<=0){
     const m=b.moves[Math.floor(Math.random()*b.moves.length)];
     b.move=m; b.state='wind'; b.st=0;
-    b.windLen= m==='fire'?34:(m==='stomp'?26:(m==='charge'?20:24));
-    b.atkLen = m==='fire'?40:(m==='charge'?46:(m==='stomp'?26:26));
+    b.windLen= m==='fire'?34:(m==='stomp'?26:(m==='charge'?20:(m==='repel'?16:24)));
+    b.atkLen = m==='fire'?40:(m==='charge'?46:(m==='stomp'?26:(m==='repel'?22:26)));
   }
 }
 
@@ -888,6 +904,11 @@ function connect(e,s){
   const crit=Math.random()<critChance();
   const wp=(e.k==='boss'&&e.weakOpen>0)?2.4:1;     // land your string in the exposed window
   const dmg = s.dmg*(1+P.conf/200)*P.dmgMul*dmgUp()*(crit?2.4+U.knuck*0.7:1)*wp;   // KNUCKLES: fatter crits
+  if(e.k==='boss' && bossInv(e)){                  // mid-move i-frames: NO damage, and it shoves you off
+    e.flash=4; blip(150,.04);
+    if(e.repelCd<=0) bossRepel(e);
+    return crit;
+  }
   e.hp-=dmg;
   if(e.k==='boss'){                                // bosses don't stun/launch/smash — they chip and stagger
     e.flash=8; hitstop=crit?7:4; shake=Math.max(shake,crit?5:2.4);
@@ -1411,6 +1432,7 @@ function update(){
     if(f.foe===false){                                 // your fireball — burns whoever it catches
       for(const e of ents){ if(e.dead) continue;
         if(Math.abs(f.x-e.x)<f.r*0.8+e.w && Math.abs(f.z-e.z)<f.r*0.6+e.d){
+          if(e.k==='boss' && bossInv(e)){ f.gone=true; e.flash=3; break; }   // shielded mid-move
           const fd=f.r>7?11:7; e.hp-=fd; e.flash=8;
           if(e.k==='boss'){ e.dmgTaken=(e.dmgTaken||0)+fd; if(e.hp<=0&&!e.dead) killBoss(e); }
           else { e.hitstun=Math.max(e.hitstun,8);
@@ -1433,7 +1455,7 @@ function update(){
   for(const cw of crowd){ cw.ph+=0.03;
     if(cw.blob) continue;
     // no invitation needed. get within a block and they're already coming.
-    if(!cw.joinT && Math.abs(cw.x-P.x)<170 && live<11) cw.joinT=Math.floor(rnd(16,120));
+    if(!cw.joinT && !boss && Math.abs(cw.x-P.x)<170 && live<11) cw.joinT=Math.floor(rnd(16,120));   // the street stays back during a boss fight
     if(cw.joinT>0){ cw.joinT--; if(cw.joinT===0){ aggro(cw,false); continue; } }
     if(!cw.flinch && ents.some(e=>!e.dead&&Math.abs(e.x-cw.x)<60)) cw.flinch=18;
     if(cw.flinch>0) cw.flinch--; }
