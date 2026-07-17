@@ -614,7 +614,7 @@ const P={};
 function reset(){
   Object.assign(P,{x:120,z:300,y:0,vy:0,face:1,hp:100,maxhp:100,drunk:0,conf:0,money:20,
     state:'idle',st:0,step:0,buf:0,connected:false,hitDone:false,driftPh:0,iframes:0,
-    dmgMul:1,dmgT:0,scammedBy:null,lean:0,stumble:0,stumbleV:0,hitFlash:0,airT:0,deaths:0,
+    dmgMul:1,dmgT:0,fireT:0,scammedBy:null,lean:0,stumble:0,stumbleV:0,hitFlash:0,airT:0,deaths:0,
     bottles:2,stepV:0,talkT:0,talkN:null,downT:0,knockV:0});
   U={liver:0,hands:0,body:0,chin:0,rep:0,game:0,eyes:0,boots:0,reach:0,knuck:0,hide:0,iron:0,pockets:0}; burgerCost=25;
   P.maxhp=100; P.conf=0;
@@ -735,7 +735,7 @@ function emitFire(e){
   for(let i=0;i<(e.big?4:2);i++)
     fires.push({x:mx, z:e.z+rnd(-3,3), y:my+rnd(-2,3),
       vx:d*rnd(2.6,4.6)*(e.big?1.25:1), vz:rnd(-.28,.28), vy:rnd(-.04,.22),
-      r:e.big?9:5, life:rnd(24,42), max:42});
+      r:e.big?9:5, life:rnd(24,42), max:42, foe:true});   // enemy fire burns YOU
   if(t%6===0) blip(e.big?70:110,.03);
 }
 
@@ -817,7 +817,7 @@ function forceBoss(){
 
 function killBoss(b){
   b.dead=1; b.state='dead'; b.tok=false;
-  P.conf=Math.min(100,P.conf+30);
+  P.conf=Math.min(100,P.conf+20);
   P.hp=Math.min(P.maxhp, P.hp+Math.round(P.maxhp*0.6));   // the reward that lets you keep going
   shake=15; rumble(820,1,1,true);
   say(b.x,b.z-80,'DROPPED','#ff5a2e');
@@ -877,8 +877,8 @@ function updateBoss(b){
 }
 
 //====================== combat ======================
-function atkBox(){ const s=cStep(); const reach = (P.step===3?36:28)+U.reach*7;   // ~one body-length ahead; REACH extends it
-  return {x:P.x+P.face*(16+reach/2), z:P.z, rw:reach/2, rd:18+U.reach*3}; }   // arc catches whoever's right in front of you
+function atkBox(){ const reach = (P.step===3?34:30)+U.reach*6;   // ~30px forward; REACH extends it
+  return {x:P.x+P.face*reach/2, z:P.z, rw:reach/2, rd:18+U.reach*3}; }   // right in front of you
 function hits(b,e){ return Math.abs(b.x-e.x)<b.rw+e.w && Math.abs(b.z-e.z)<b.rd+e.d; }
 
 function connect(e,s){
@@ -912,12 +912,12 @@ function connect(e,s){
     if(e.k!=='rat'){ tooth(e.x,e.z); say(e.x,e.z,'SMASH','#ffb545'); shake=8; hitstop=Math.max(hitstop,10);
       rumble(380,1,1,true); }
   }
-  if(e.hp<=0 && !e.dead){ e.dead=1; P.conf=Math.min(100,P.conf+(e.big?14:e.elite?10:4));
+  if(e.hp<=0 && !e.dead){ e.dead=1; P.conf=Math.min(100,P.conf+(e.big?9:e.elite?6:2.5));
     if(e.big){ shake=10; rumble(600,1,1,true); say(e.x,e.z-40,'DROPPED IT','#ff5a2e');
       for(let i=0;i<4;i++) drop(e.x+rnd(-20,20),e.z,'cash'); tooth(e.x,e.z); tooth(e.x,e.z); }
-    if(e.k==='vamp'){ Math.random()<0.5?drop(e.x,e.z,'jameson'):drop(e.x,e.z,'cash');
+    if(e.k==='vamp'){ Math.random()<0.28?drop(e.x,e.z,'jameson'):drop(e.x,e.z,'cash');
       if(e.elite){ drop(e.x+rnd(-10,10),e.z,'cash'); tooth(e.x,e.z); rumble(300,1,1,true); } }
-    if(e.k!=='rat' && Math.random()<0.14) drop(e.x+rnd(-14,14),e.z,'burger'); }  // a meal off the body, now and then
+    if(e.k!=='rat' && Math.random()<0.06) drop(e.x+rnd(-14,14),e.z,'burger'); }  // rare — a burger's worth buying
   return crit;
 }
 
@@ -927,8 +927,15 @@ function resolveTalk(n){
   if(n.scammer){ const lost=Math.floor(P.money*0.4); P.money-=lost;
     say(n.x,n.z,'-$'+lost,'#ff2e88'); P.dmgMul=1.5; P.dmgT=600; rumble(420,1,.9,true);
     say(P.x,P.z-22,'PISSED · 1.5x','#ff2e88'); P.scammedBy=n; shake=3; }
-  else{ P.conf=Math.min(100,P.conf+15); say(n.x,n.z,'+15 CONF','#c9d13a'); rumble(200,.3,.6,true);
-    if(app>=9.5){ P.dmgMul=2; P.dmgT=1200; say(P.x,P.z-22,'2x DAMAGE','#ffb545'); } }
+  else{ P.conf=Math.min(100,P.conf+9); say(n.x,n.z,'+9 CONF','#c9d13a'); rumble(200,.3,.6,true);
+    if(app>=9.5){                                       // a real 10/10 — it goes one of two ways
+      if(Math.random()<0.4 && camLock===null && !boss){ // her man turns up
+        say(n.x,n.z-32,'...HER MAN','#ff2e88'); say(P.x,P.z-30,'INCOMING','#ff5a2e');
+        camLock=Math.max(0,P.x-170); spawnBoss(Math.max(1,Math.floor(P.x/4000)+1));
+      } else {                                          // she's into it — fists of fire for a while
+        P.fireT=780; say(P.x,P.z-22,'FISTS OF FIRE','#ff5a2e'); rumble(360,.8,.7,true); shake=4;
+      }
+    } }
 }
 
 function hurtPlayer(dmg,fromX){
@@ -1047,6 +1054,9 @@ function update(){
     if(jPunch && P.st>=s.su) P.buf=12;
     if(P.buf>0)P.buf--;
     const active = P.st>s.su && P.st<=s.su+s.act;
+    if(P.fireT>0 && P.st===s.su+1){                   // FISTS OF FIRE — each swing hurls a fireball
+      fires.push({x:P.x+P.face*18, z:P.z, y:20, vx:P.face*5.4, vz:0, vy:0.03, r:7, life:46, max:48, foe:false});
+      blip(90,.05); }
     if(active && !P.hitDone){
       const b=atkBox();
       const whiff = Math.random()<whiffChance();     // one roll per swing, not per body
@@ -1075,7 +1085,7 @@ function update(){
     }
   }
   else if(P.state==='drink'){ P.st++;
-    if(P.st===24){ P.drunk=Math.min(100,P.drunk+18); P.conf=Math.min(100,P.conf+6);
+    if(P.st===24){ P.drunk=Math.min(100,P.drunk+18); P.conf=Math.min(100,P.conf+4);
       if(U.iron && P.hp<P.maxhp){ const h=U.iron*10; P.hp=Math.min(P.maxhp,P.hp+h); say(P.x,P.z-20,'+'+h,'#ffb545'); }  // IRON GUT
       say(P.x,P.z-6,'+18','#c9d13a'); blip(220,.04); rumble(300,.18,.75,true); }
     if(P.st>=36) P.state='idle';
@@ -1150,6 +1160,7 @@ function update(){
   if(P.hitFlash>0)P.hitFlash--;
   for(const e of ents) if(e.flash>0) e.flash--;
   if(P.dmgT>0){ P.dmgT--; if(!P.dmgT)P.dmgMul=1; }
+  if(P.fireT>0){ P.fireT--; if(!P.fireT) say(P.x,P.z-20,'burned out','#5c5670'); }
   if(P.scammedBy && P.drunk<28 && !P.scammedBy.revealed){ P.scammedBy.revealed=true;
     say(P.scammedBy.x,P.scammedBy.z,P.scammedBy.trueTier+'/10','#5c5670'); P.scammedBy=null; }
 
@@ -1228,7 +1239,7 @@ function update(){
         if(c.hp<=0){ c.dead=true; puff(c.x,c.z,20,c.type==='dumpster'?16:10,'#6b6478'); const r=Math.random();
           const trash = c.type==='can'||c.type==='dumpster';        // rats nest in the trash, not the crates
           if(r<0.34 && trash){ for(let i=0;i<(c.type==='dumpster'?4:3);i++) ents.push(rat(c.x+rnd(-10,10),c.z)); say(c.x,c.z,'RATS','#7d7791'); }
-          else if(r<0.66) drop(c.x,c.z,'cash'); else drop(c.x,c.z,'jameson');
+          else if(r<0.88) drop(c.x,c.z,'cash'); else drop(c.x,c.z,'jameson');   // mostly cash — bottles are rarer now
           if(c.type==='dumpster') drop(c.x+rnd(-10,10),c.z,'cash'); } } } }   // dumpsters pay out extra
   for(const c of cans) if(c.shake>0)c.shake--;
 
@@ -1272,6 +1283,17 @@ function update(){
   //---- fire lives on the pavement for a second after it leaves the mouth
   for(const f of fires){ f.x+=f.vx; f.z+=f.vz; f.y+=f.vy; f.vx*=0.965; f.r+=0.30; f.life--;
     if(f.life<0){ f.gone=true; continue; }
+    if(f.foe===false){                                 // your fireball — burns whoever it catches
+      for(const e of ents){ if(e.dead) continue;
+        if(Math.abs(f.x-e.x)<f.r*0.8+e.w && Math.abs(f.z-e.z)<f.r*0.6+e.d){
+          const fd=f.r>7?11:7; e.hp-=fd; e.flash=8;
+          if(e.k==='boss'){ e.dmgTaken=(e.dmgTaken||0)+fd; if(e.hp<=0&&!e.dead) killBoss(e); }
+          else { e.hitstun=Math.max(e.hitstun,8);
+            if(e.hp<=0&&!e.dead){ e.dead=1; P.conf=Math.min(100,P.conf+1.5); puff(e.x,e.z,e.h*0.5,6,'#ff8c3a'); } }
+          f.gone=true; break;
+        } }
+      continue;
+    }
     if(Math.abs(f.x-P.x)<f.r*0.8+9 && Math.abs(f.z-P.z)<f.r*0.4+9 && P.y<26)
       hurtPlayer(f.r>7?9:6, f.x);
   }
@@ -1986,6 +2008,7 @@ function hud(){
   ctx.font='7px "JetBrains Mono",monospace'; ctx.fillStyle='#5c5670';
   ctx.fillText('CRIT '+Math.round(critChance()*100)+'%  WHIFF '+Math.round(whiffChance()*100)+'%',W-12,32);
   if(P.dmgT>0){ ctx.fillStyle='#ffb545'; ctx.fillText(P.dmgMul+'x DMG '+Math.ceil(P.dmgT/60)+'s',W-12,42); }
+  if(P.fireT>0){ ctx.fillStyle='#ff5a2e'; ctx.fillText('FISTS OF FIRE '+Math.ceil(P.fireT/60)+'s',W-12,P.dmgT>0?52:42); }
   if(P.state==='talk'){ ctx.textAlign='center'; ctx.fillStyle='#ff2e88';
     ctx.font='7px "JetBrains Mono",monospace'; ctx.fillText('TALKING · GUARD DOWN · 1.5x DMG',W/2,H-14); }
 
