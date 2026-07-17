@@ -1422,7 +1422,8 @@ function update(){
     if(n && n.blown){ say(n.x,n.z-30,'she watched you fall','#5c5670'); }
     else if(n && !n.talked){ const gate=Math.max(0,(n.trueTier-5)*14);
       if(P.conf < gate-goggles()*8){ say(n.x,n.z,"she's not looking",'#5c5670'); }
-      else { startDate(n); }
+      else if(Math.min(10,n.trueTier+goggles())>=9.5){ startDate(n); }   // a real 10/10 is worth the whole date
+      else { P.state='talk'; P.talkT=0; P.talkN=n; n.listening=true; P.face=n.x>P.x?1:-1; }  // everyone else: just a quick chat
     }
   }
 
