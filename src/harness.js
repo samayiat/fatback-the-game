@@ -79,9 +79,10 @@ const driver = `
    get BUILDINGS(){return BUILDINGS}, get GATES(){return GATES}, get U(){return U},
    get UPG(){return UPG}, get COMBO(){return COMBO}, get camX(){return camX},
    get boss(){return boss}, get camLock(){return camLock},
+   get date(){return date}, get dateOn(){return dateOn},
    spawn:(e)=>ents.push(e), clearEnts:()=>{ ents.length=0; },
    rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
-   genBoss,spawnBoss,updateBoss,killBoss});
+   genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
 ;globalThis.__tick=(n)=>{ for(let i=0;i<n;i++){ update(); } };
 ;globalThis.__draw=()=>render();
@@ -165,19 +166,37 @@ if(!err){
   scene('take a hit / knockdown', ()=>{
     const g=__G(); g.P.iframes=0; g.hurtPlayer(20,g.P.x+30); __tick(120); __draw();
   });
-  scene('talk channel to completion', ()=>{
+  scene('date: nail the rhythm flirt → resolves with conf', ()=>{
     const g=__G(); g.ents.length=0;
-    const n=g.npcs.find(q=>!q.talked); if(!n) throw new Error('no npc available');
-    g.P.x=n.x; g.P.z=n.z; g.P.conf=100; g.P.drunk=0;
-    __key('KeyE',true); __tick(1); __key('KeyE',false);
-    __tick(g.talkLen()+20); __draw();
+    const n=g.npcs.find(q=>!q.talked && !q.scammer) || g.npcs[0];
+    n.talked=false; n.scammer=false; n.trueTier=7; n.blown=false;
+    g.P.x=n.x; g.P.z=n.z; g.P.conf=50; g.P.drunk=0;
+    g.startDate(n);                                  // (talk-init calls this; drive it directly for a clean test)
+    if(!g.dateOn) throw new Error('startDate did not begin the date');
+    const conf0=g.P.conf, KEYS=['KeyJ','KeyK','KeyL','KeyE'];
+    let guard=0;
+    while(g.dateOn && guard++<3000){
+      const d=g.date;
+      for(const nt of d.notes){ if(!nt.hit&&!nt.miss && Math.abs(nt.hitT-d.t)<=2) __key(KEYS[nt.lane],true); }
+      __tick(1); __draw();
+      for(const k of KEYS) __key(k,false);
+    }
+    if(g.dateOn) throw new Error('date never ended');
+    if(!n.talked) throw new Error('date did not resolve');
+    if(g.P.conf<=conf0) throw new Error('a nailed date gave no confidence');
+    console.log('        nailed date; conf '+conf0+' -> '+Math.round(g.P.conf));
   });
-  scene('talk interrupted by a hit', ()=>{
-    const g=__G();
-    const n=g.npcs.find(q=>!q.talked);
-    if(n){ g.P.x=n.x; g.P.z=n.z; g.P.conf=100; g.P.iframes=0;
-      __key('KeyE',true); __tick(1); __key('KeyE',false); __tick(30);
-      g.P.iframes=0; g.hurtPlayer(9,g.P.x+20); __tick(120); __draw(); }
+  scene('date: bombing the rhythm blows her off', ()=>{
+    const g=__G(); g.ents.length=0;
+    const n=g.npcs.find(q=>!q.talked) || g.npcs[0];
+    n.talked=false; n.blown=false; n.trueTier=7;
+    g.P.x=n.x; g.P.z=n.z; g.P.conf=60; g.P.drunk=0;
+    g.startDate(n);
+    if(!g.dateOn) throw new Error('startDate did not begin the date');
+    let guard=0; while(g.dateOn && guard++<3000){ __tick(1); }   // press nothing → miss everything
+    if(!n.talked) throw new Error('bombed date did not resolve');
+    if(!n.blown) throw new Error('bombing should blow her off');
+    __draw();
   });
   scene('shop: open, buy every rank of everything', ()=>{
     const g=__G();
