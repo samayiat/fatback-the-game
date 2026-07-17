@@ -250,6 +250,42 @@ if(!err){
     if(b.hp<hp0) throw new Error('ducked cart man took damage through the cart');
     console.log('        skewers thrown; ducked = shielded');
   });
+  scene('auteur boss: clapper/tornado + the tidy window is vulnerable', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle';
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'auteur'); const b=g.boss;
+    if(!b||b.arch!=='auteur') throw new Error('auteur did not spawn');
+    for(let i=0;i<40;i++){ __tick(1); __draw(); }
+    b.tidyCd=999;
+    const force=(mv,wl,al)=>{ b.state='wind'; b.st=0; b.move=mv; b.windLen=wl; b.atkLen=al;
+      for(let i=0;i<wl+al+6;i++){ __tick(1); __draw(); } };
+    force('clap',16,22); if(!g.fires.some(f=>f.clap)) throw new Error('no clapperboard');
+    force('tornado',26,24); if(!g.fires.some(f=>f.tornado)) throw new Error('no tornado');
+    b.tidyCd=1; let ticks=0; while(b.state!=='tidy' && ticks++<200){ __tick(1); __draw(); }
+    if(b.state!=='tidy') throw new Error('auteur never tidied');
+    const hp0=b.hp; g.P.x=b.x-24; g.P.face=1; g.P.iframes=0;
+    g.connect(b,{dmg:30,stun:10});
+    if(!(b.hp<hp0)) throw new Error('the tidy window must be vulnerable');
+    console.log('        clap + tornado + tidy-window-open ok');
+  });
+  scene('scam scales with confidence: broke on a 10/10 empties pockets, confident keeps it', ()=>{
+    const g=__G(); g.clearEnts(); g.setCamLock(0);     // camLock non-null suppresses the 'her man' boss side-effect
+    g.P.z=300; g.P.drunk=0;
+    const mk=()=>({x:0,z:0,trueTier:10,scammer:false,talked:false,blown:false,listening:false,laugh:0,tellPh:0,lie:0,lieT:0,revealed:false});
+    g.P.conf=0; g.P.money=1000; g.resolveTalk(mk());
+    if(g.P.money>60) throw new Error('0-conf 10/10 should empty pockets, left $'+g.P.money);
+    g.P.conf=100; g.P.money=1000; g.resolveTalk(mk());
+    if(g.P.money<1000) throw new Error('confident player got played, lost $'+(1000-g.P.money));
+    console.log('        broke → cleaned out; confident → kept it');
+  });
+  scene('confidence bleeds over time', ()=>{
+    const g=__G(); g.clearEnts();
+    g.U.rep=0; g.P.conf=80; g.P.drunk=0; g.P.x=400; g.P.z=300;
+    const c0=g.P.conf; __tick(150);
+    if(!(g.P.conf<c0-3)) throw new Error('confidence did not bleed: '+c0+'→'+g.P.conf);
+    console.log('        conf '+c0+' → '+Math.round(g.P.conf)+' over 150 ticks');
+  });
   scene('shop: open, buy every rank of everything', ()=>{
     const g=__G();
     const b=g.BUILDINGS.find(q=>q.kind==='burger');
