@@ -35,6 +35,12 @@ K="Smoking_a_cigarette."
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
     add(f"smoke.rot.{d}", f"{K}/rotations/{d}.png")
 
+# the women outside the clubs — 8-way rotations each. w0..w3 keyed by index.
+WOMEN=["Keisha","Marisol","Simone","Tiana"]
+for wi,Wn in enumerate(WOMEN):
+    for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
+        add(f"w{wi}.rot.{d}", f"{Wn}/rotations/{d}.png")
+
 n=len(entries)
 rows=(n+COLS-1)//COLS
 sheet=Image.new("RGBA",(COLS*S,rows*S),(0,0,0,0))

@@ -616,6 +616,7 @@ function reset(){
 let best=0;
 
 function mkNpc(x,z){ return {x,z,trueTier:Math.floor(rnd(3,11)),scammer:Math.random()<0.45,
+  who:Math.floor(Math.random()*4),
   talked:false,blown:false,tellPh:rnd(0,6),lie:0,lieT:0,revealed:false,listening:false,laugh:0}; }
 
 //====================== drunk math ======================
@@ -1499,8 +1500,11 @@ function drawVamp(e){ const sx=e.x-camX;
 
 function drawNPC(n){ const sx=n.x-camX; shadow(n.x,n.z,14);
   const app=Math.min(10,n.trueTier+goggles());
-  ctx.fillStyle= n.blown?'#2a2636' : n.talked?'#3b3547':'#7a2c5a'; ctx.fillRect(sx-9,n.z-52,18,52);
-  ctx.fillStyle= n.blown?'#37323f' : n.talked?'#4a4458':'#a63d78'; ctx.fillRect(sx-11,n.z-66,22,16);
+  // the woman herself — faces you when you're near, turns her back once she's done with you
+  const dir = n.blown ? 'north' : (Math.abs(n.x-P.x)<130 ? (P.x<n.x?'south-west':'south-east') : 'south');
+  let ntint=null, namt=0;
+  if(n.blown){ ntint='#17151d'; namt=.62; } else if(n.talked){ ntint='#2a2636'; namt=.36; }
+  spr('w'+(n.who||0)+'.rot.'+dir, sx, n.z, 1, ntint, namt, 0.92);
   if(n.blown && Math.abs(n.x-P.x)<50 && Math.abs(n.z-P.z)<34){   // back turned, and staying that way
     ctx.fillStyle='#5c5670'; ctx.font='7px "JetBrains Mono",monospace'; ctx.textAlign='center';
     ctx.fillText('✕', sx, n.z-74); }
