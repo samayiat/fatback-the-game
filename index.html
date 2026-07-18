@@ -515,7 +515,7 @@ $('resume').onclick=()=>setPause(false);
 $('pauseBtn').onclick=()=>setPause(!paused);
 $('devHotspot').onclick=()=>{ if(mode==='title') startSolo(); };
 $('devTrigger').onclick=()=>{ const dt=$('devToggle'); dt.style.display=dt.style.display==='none'?'block':'none'; };
-$('devToggle').onclick=()=>{ if(mode==='title') startCoop(); };
+$('devToggle').onclick=()=>{ startCoop(); };
 $('d_sober').onclick=()=>P.drunk=0;
 $('d_drunk').onclick=()=>P.drunk=Math.min(100,P.drunk+40);
 $('d_cash').onclick=()=>P.money+=100;
