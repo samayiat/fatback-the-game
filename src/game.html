@@ -1694,6 +1694,7 @@ function update(){
   let iz=(key.KeyS||key.ArrowDown?1:0)-(key.KeyW||key.ArrowUp?1:0);
   if(Math.abs(T.ax)>0.01||Math.abs(T.az)>0.01){ ix=T.ax; iz=T.az; }
   if(pad && (Math.abs(PAD.ax)>0||Math.abs(PAD.az)>0)){ ix=PAD.ax; iz=PAD.az; }
+  const wantStreet = iz>0.35;          // holding DOWN, toward the road — the shove modifier
   const jPunch=tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH),
         jJump =tap('KeyK')||tapT('B')||(pad&&pad.JUMP),
         jDrink=tap('KeyL')||tapT('C')||(pad&&pad.DRINK),
@@ -1794,7 +1795,7 @@ function update(){
       if(P.bottles>0){ P.bottles--; P.state='drink'; P.st=0; }
       else { say(P.x,P.z-18,'EMPTY','#5c5670'); blip(90,.02); }
     }
-    if(jPunch && P.y===0 && !tryToss()){   // at the curb, a staggered mark gets shoved into the street instead
+    if(jPunch && P.y===0 && !(wantStreet && tryToss())){   // DOWN + punch at the curb = shove into the street; a plain punch still combos
       P.state='punch'; P.step=0; P.st=0; P.buf=0; P.stepV=0; P.hitDone=false; P.connected=false;
       let best=null,bd=70;
       for(const e of ents){ if(e.dead)continue; const d=Math.hypot(e.x-P.x,(e.z-P.z)*2);
@@ -3094,7 +3095,7 @@ function render(){
   if(!dateOn && !boss){ const g=grabbable();
     if(g && atCurb()){ const carSoon=cars.some(c=>Math.sign(c.spd)===Math.sign(g.x-c.x) && Math.abs(c.x-g.x)<180);
       ctx.textAlign='center'; ctx.font='bold 9px "JetBrains Mono",monospace';
-      ctx.fillStyle= carSoon?'#ff2e88':'#ffb545'; if(t%20<15) ctx.fillText(carSoon?'SHOVE! →':'SHOVE INTO TRAFFIC', g.x-camX, g.z-58);
+      ctx.fillStyle= carSoon?'#ff2e88':'#ffb545'; if(t%20<15) ctx.fillText(carSoon?'↓ SHOVE! →':'↓ SHOVE INTO TRAFFIC', g.x-camX, g.z-58);
       ctx.strokeStyle=ctx.fillStyle; ctx.lineWidth=1; ctx.globalAlpha=.5+.3*Math.sin(t*.3);
       ctx.strokeRect(g.x-camX-g.w, g.z-g.d, g.w*2, g.d*2); ctx.globalAlpha=1; } }
 
