@@ -1007,7 +1007,9 @@ function killBoss(b){
 
 function bossHit(reach,zr,dmg,sober){                      // shared melee check for boss attacks
   if(boss.hitDone) return;
-  if(Math.abs(P.x-(boss.x+boss.face*reach*0.55))<reach && Math.abs(P.z-boss.z)<zr){
+  // Tight forward strike zone: you have to be lined up in front to eat it, not just nearby.
+  const cx=boss.x+boss.face*reach*0.85;                    // centered out in front of the boss
+  if(Math.abs(P.x-cx)<reach*0.5 && Math.abs(P.z-boss.z)<zr*0.6){
     hurtPlayer(dmg,boss.x,sober); boss.hitDone=true; }
 }
 // SOBER tiers: light pokes rattle you a little (10%), heavy signature hits crack you sober (50%).
@@ -1017,7 +1019,7 @@ function bossAttack(b,dx,dz,d){
   if(m==='fire'){ if(b.st>6 && b.st<34 && b.st%2===0) emitFire(b); }
   else if(m==='stomp'){
     if(b.st===12){ shake=11; rumble(320,1,.5,true);        // slam → ground shockwave (heavy)
-      if(P.y<26 && Math.abs(P.x-b.x)<140){ hurtPlayer(ch+8,b.x,S_HEAVY); }
+      if(P.y<26 && Math.abs(P.x-b.x)<92){ hurtPlayer(ch+8,b.x,S_HEAVY); }
       for(let i=0;i<16;i++) puff(b.x+rnd(-46,46),b.z,rnd(0,6),1,'#6b6478'); } }
   else if(m==='charge'){ if(b.st<30){ b.x+=b.face*b.spd*3.0; bossHit(42,18,ch+4,S_HEAVY); } }
   else if(m==='hook'){ if(b.st>8 && b.st<18) bossHit(54,18,ch+6,S_HEAVY); }
