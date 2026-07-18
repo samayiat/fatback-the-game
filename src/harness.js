@@ -337,6 +337,29 @@ if(!err){
     if(!(b.hp<hp0)) throw new Error('lawyer recover window must be vulnerable');
     console.log('        subpoena fan + gavel shockwave + open on recover');
   });
+  scene('lawyer boss: the briefcase lockup cages you, bangs you, mash to break out', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle'; g.P.iframes=0;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'lawyer'); const b=g.boss;
+    if(!b||b.arch!=='lawyer') throw new Error('lawyer did not spawn');
+    for(let i=0;i<50;i++){ __tick(1); __draw(); }         // settle past the intro + entrance i-frames
+    // force the grab from point-blank — expect to get caged
+    g.P.state='idle'; g.P.cageB=null; b.caged=false;      // clear anything the settle loop started
+    b.x=g.P.x+50; b.z=g.P.z; b.face=-1; g.P.iframes=0;
+    b.state='wind'; b.st=0; b.move='lockup'; b.windLen=18; b.atkLen=74; b.hitDone=false;
+    let caged=false; for(let i=0;i<30;i++){ __tick(1); __draw(); if(g.P.state==='caged') caged=true; g.P.iframes=0; }
+    if(!caged) throw new Error('the point-blank lockup did not cage the player');
+    const hp0=g.P.hp;
+    for(let i=0;i<40;i++){ __tick(1); __draw(); }        // let the case get banged
+    if(!(g.P.hp<hp0)) throw new Error('the briefcase slams did no damage');
+    // out-of-range: the grab must whiff (not cage), and he opens on recover
+    g.P.hp=g.P.maxhp; g.P.state='idle'; g.P.x=b.x-300; g.P.z=g.P.z; g.P.iframes=0; b.caged=false;
+    b.state='wind'; b.st=0; b.move='lockup'; b.windLen=18; b.atkLen=74; b.hitDone=false;
+    let everCaged=false; for(let i=0;i<30;i++){ __tick(1); __draw(); if(g.P.state==='caged') everCaged=true; }
+    if(everCaged) throw new Error('a far-away grab should whiff, not cage');
+    console.log('        lockup cages + bangs you; out-of-range whiffs');
+  });
   scene('scam scales with confidence: broke on a 10/10 empties pockets, confident keeps it', ()=>{
     const g=__G(); g.clearEnts(); g.setCamLock(0);     // camLock non-null suppresses the 'her man' boss side-effect
     g.P.z=300; g.P.drunk=0;
