@@ -701,7 +701,7 @@ function genChunk(ci){
   for(let i=0;i<4;i++){ const ty=['tree','tree','hydrant','newsbox','bench','mailbox'][Math.floor(R()*6)];
     props.push({x:x0+30+R()*(CHUNK-60), z:FLOOR_N-2+R()*22, type:ty, ph:R()*9, chunk:ci}); }
   for(let i=0;i<8;i++) crowd.push({x:x0+R()*CHUNK, z:FLOOR_N-9+R()*7, ph:R()*9, blob:true, chunk:ci});
-  if(ci>0) GATES.push({x:x0+240+R()*280, done:false, chunk:ci});
+  if(ci>0) { const gx = x0+240+R()*280; GATES.push({x:gx, done:false, chunk:ci}); console.log("GATE created at x=" + gx + " chunk=" + ci); }
   CLUBS=BUILDINGS.filter(b=>b.kind==='club');
 }
 
@@ -1962,6 +1962,7 @@ function update(){
   const bn=Math.floor(P.x/4000);
   if(bn>bossDone && bn>0 && camLock===null){ bossDone=bn; camLock=Math.max(0,P.x-170); spawnBoss(bn); }
   for(const g of GATES) if(!g.done && P.x>g.x && P.x-g.x<140 && camLock===null){   // only the gate you JUST crossed — never one far behind
+    console.log("GATE TRIGGERED! x=", g.x, "tier=", tier(), "GATES.length=", GATES.length);
     camLock=Math.max(0,g.x-170); spawnWave(tier()); g.done='fight'; }
   if(camLock!==null && !OPT.freecam){
     camX+=(camLock-camX)*0.1;
