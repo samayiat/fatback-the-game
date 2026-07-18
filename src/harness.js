@@ -315,6 +315,28 @@ if(!err){
     if(g.P.hp<hp1) throw new Error('out-of-frame still ate the photo');
     console.log('        bus parked; in-frame flashed, out-of-frame safe');
   });
+  scene('lawyer boss: serves a subpoena fan, gavel sends a shockwave, open on recover', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle';
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'lawyer'); const b=g.boss;
+    if(!b||b.arch!=='lawyer') throw new Error('lawyer did not spawn');
+    for(let i=0;i<40;i++){ __tick(1); __draw(); }
+    // force a subpoena — expect a fan of three papers in the air at once
+    b.state='wind'; b.st=0; b.move='subpoena'; b.windLen=16; b.atkLen=22; b.hitDone=false;
+    let fan=0; for(let i=0;i<50;i++){ __tick(1); __draw(); fan=Math.max(fan,g.fires.filter(f=>f.paper).length); }
+    if(fan<3) throw new Error('the lawyer did not serve a 3-paper fan, saw '+fan);
+    // force a gavel slam — expect ground shockwave rings
+    b.state='wind'; b.st=0; b.move='gavel'; b.windLen=22; b.atkLen=30; b.hitDone=false;
+    let sawShock=false; for(let i=0;i<60;i++){ __tick(1); __draw(); if(g.fires.some(f=>f.shock)) sawShock=true; }
+    if(!sawShock) throw new Error('the gavel produced no shockwave');
+    // the recover window is the opening — a clean hit must land
+    b.state='recover'; b.st=0; __tick(1);
+    const hp0=b.hp; g.P.x=b.x-24; g.P.face=1; g.P.iframes=0;
+    g.connect(b,{dmg:30,stun:10});
+    if(!(b.hp<hp0)) throw new Error('lawyer recover window must be vulnerable');
+    console.log('        subpoena fan + gavel shockwave + open on recover');
+  });
   scene('scam scales with confidence: broke on a 10/10 empties pockets, confident keeps it', ()=>{
     const g=__G(); g.clearEnts(); g.setCamLock(0);     // camLock non-null suppresses the 'her man' boss side-effect
     g.P.z=300; g.P.drunk=0;
