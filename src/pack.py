@@ -41,6 +41,12 @@ for wi,Wn in enumerate(WOMEN):
     for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
         add(f"w{wi}.rot.{d}", f"{Wn}/rotations/{d}.png")
 
+# environment props (92x92)
+PROPS=["dumpster","hydrant","mailbox","sign","fireescalpe","gate"]
+for prop in PROPS:
+    if os.path.exists(os.path.join(ROOT,f"props/{prop}.png")):
+        add(f"prop.{prop}", f"props/{prop}.png")
+
 FOOT=70   # matches game.html: feet sit on this row of the 92px cell
 
 def reframe(im):

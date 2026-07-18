@@ -697,8 +697,8 @@ function genChunk(ci){
   for(let i=0;i<3;i++){ const ty=['can','box','crate','dumpster'][Math.floor(R()*4)];
     cans.push({x:x0+40+R()*(CHUNK-80), z:FLOOR_N+8+R()*(FLOOR_S-FLOOR_N-16), type:ty,
       hp: ty==='box'?1:ty==='dumpster'?3:2, w: ty==='dumpster'?18:11, shake:0, dead:false, chunk:ci}); }
-  // street furniture against the storefronts — trees, hydrants, benches, boxes, mailboxes
-  for(let i=0;i<4;i++){ const ty=['tree','tree','hydrant','newsbox','bench','mailbox'][Math.floor(R()*6)];
+  // street furniture against the storefronts — trees, hydrants, benches, mailboxes, signs, gates, etc.
+  for(let i=0;i<6;i++){ const ty=['tree','tree','hydrant','bench','mailbox','sign','gate','dumpster'][Math.floor(R()*8)];
     props.push({x:x0+30+R()*(CHUNK-60), z:FLOOR_N-2+R()*22, type:ty, ph:R()*9, chunk:ci}); }
   for(let i=0;i<8;i++) crowd.push({x:x0+R()*CHUNK, z:FLOOR_N-9+R()*7, ph:R()*9, blob:true, chunk:ci});
   if(ci>0) { const gx = x0+240+R()*280; GATES.push({x:gx, done:false, chunk:ci}); console.log("GATE created at x=" + gx + " chunk=" + ci); }
@@ -2453,6 +2453,15 @@ function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0), z=c.z;
 
 // decorative street furniture — never breaks, just gives the block character
 function drawProp(pr){ const sx=pr.x-camX, z=pr.z;
+  // try to draw as sprite first (hydrant, mailbox, sign, gate, etc.)
+  const spriteKey = `prop.${pr.type}`;
+  if(IDX[spriteKey]){
+    shadow(pr.x,pr.z,8);
+    spr(spriteKey, sx, z, 1);  // face=1 (east), no tint
+    return;
+  }
+
+  // fallback to procedural drawing
   if(pr.type==='tree'){
     shadow(pr.x,pr.z,15);
     ctx.fillStyle='#241a12'; ctx.fillRect(sx-3,z-30,6,30);            // trunk
@@ -2460,11 +2469,6 @@ function drawProp(pr){ const sx=pr.x-camX, z=pr.z;
     ctx.fillStyle='#1e3524'; ctx.beginPath(); ctx.ellipse(sx+sway,z-42,17,15,0,0,7); ctx.fill();   // canopy
     ctx.fillStyle='#2a4a30'; ctx.beginPath(); ctx.ellipse(sx-6+sway,z-46,9,9,0,0,7); ctx.fill();
     ctx.fillStyle='#345a3b'; ctx.beginPath(); ctx.ellipse(sx+6+sway,z-40,7,7,0,0,7); ctx.fill();
-  } else if(pr.type==='hydrant'){
-    shadow(pr.x,pr.z,7);
-    ctx.fillStyle='#8f2a2a'; ctx.fillRect(sx-4,z-14,8,14);
-    ctx.fillStyle='#a83535'; ctx.fillRect(sx-5,z-16,10,3);
-    ctx.fillStyle='#6e1f1f'; ctx.fillRect(sx-6,z-9,3,3); ctx.fillRect(sx+3,z-9,3,3);
   } else if(pr.type==='newsbox'){
     shadow(pr.x,pr.z,8);
     ctx.fillStyle='#2f5a8f'; ctx.fillRect(sx-7,z-20,14,20);
@@ -2475,11 +2479,6 @@ function drawProp(pr){ const sx=pr.x-camX, z=pr.z;
     ctx.fillStyle='#2c2419'; ctx.fillRect(sx-14,z-16,28,3);          // back rail
     ctx.fillStyle='#3a2f22'; ctx.fillRect(sx-14,z-9,28,3);           // seat
     ctx.fillStyle='#241d14'; ctx.fillRect(sx-12,z-9,3,9); ctx.fillRect(sx+9,z-9,3,9);   // legs
-  } else {                                                            // mailbox
-    shadow(pr.x,pr.z,8);
-    ctx.fillStyle='#2f4a6e'; ctx.fillRect(sx-6,z-15,12,15);
-    ctx.fillStyle='#3a5c88'; ctx.beginPath(); ctx.ellipse(sx,z-15,6,4,0,Math.PI,0); ctx.fill();     // rounded top
-    ctx.fillStyle='#0b0a10'; ctx.fillRect(sx-4,z-9,8,2);             // slot
   }
 }
 
