@@ -86,7 +86,7 @@ const driver = `
    setCamLock:(v)=>{ camLock=v; camX=v; }, setBest:(v)=>{ best=v; }, setLives:(v)=>{ lives=v; },
    releaseArena:()=>{ ents.length=0; camLock=null; boss=null; bossDone=0; hitstop=0; dateOn=false; date=null; fires.length=0; },
    rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
-   tryToss,grabbable,atCurb,splatInTraffic,
+   tryGrab,grabbable,atCurb,splatInTraffic,dropGrab,launchGrabbed,tossPlayerToStreet,
    genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate,
    buyContinue,callItNight,clutchRevive,continueCost,confFloor});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
@@ -361,26 +361,63 @@ if(!err){
     if(everCaged) throw new Error('a far-away grab should whiff, not cage');
     console.log('        lockup cages + bangs you; out-of-range whiffs');
   });
-  scene('toss into traffic: shove a staggered mark off the curb, a car splats it for the bounty', ()=>{
+  scene('grab-toss: hold ↓+punch to grab, wind up, hurl into traffic; a hit mid-windup breaks it', ()=>{
     const g=__G(); g.releaseArena();
-    g.P.hp=g.P.maxhp=1e9; g.P.x=1200; g.P.z=310; g.P.y=0; g.P.state='idle'; g.P.iframes=999;   // standing at the curb edge
-    g.setCamLock(Math.max(0,g.P.x-170));                  // lock the arena so nothing spawns/culls under us
-    g.night.traffic=0;
-    // a staggered enemy right next to you at the curb
-    const e=g.vamp(g.P.x+24, 308, false); e.state='stun'; e.hitstun=40; g.spawn(e);
-    if(!g.grabbable()) throw new Error('a staggered mark at the curb should be grabbable');
-    if(!g.atCurb()) throw new Error('player at z=310 should count as at the curb');
-    if(!g.tryToss()) throw new Error('tryToss should fire at the curb');
-    if(e.state!=='thrown') throw new Error('the shove should throw the enemy, got '+e.state);
-    // let them sail out onto the road
-    let onRoad=false; for(let i=0;i<40;i++){ __tick(1); if(e.z>=316){ onRoad=true; } if(e.dead) break; }   // CURB=316
-    if(!onRoad && !e.dead) throw new Error('the thrown enemy never reached the road');
-    // send a car through their lane → splat
-    if(!e.dead){ g.cars.push({x:e.x-60, dir:1, spd:6, col:'#8b1a2b', lane:348, len:90, horn:false});
-      for(let i=0;i<40 && !e.dead;i++){ __tick(1); } }
-    if(!e.dead) throw new Error('the car did not splat the enemy in the road');
-    if(g.night.traffic!==1) throw new Error('a traffic kill should tally on the night, got '+g.night.traffic);
-    console.log('        curb shove → road → car splat → +1 traffic');
+    g.P.hp=g.P.maxhp=1e9; g.P.x=1200; g.P.z=310; g.P.y=0; g.P.state='idle'; g.P.iframes=999;
+    g.setCamLock(Math.max(0,g.P.x-170)); g.night.traffic=0;
+    const mk=()=>{ const e=g.vamp(g.P.x+24,308,false); e.state='walk'; e.hitstun=0; g.spawn(e); return e; };
+    // START the grab
+    let e=mk();
+    if(!g.atCurb()||!g.grabbable()) throw new Error('should be able to grab at the curb');
+    if(!g.tryGrab()) throw new Error('tryGrab should start the grab');
+    if(g.P.state!=='grab'||g.P.grabE!==e||e.state!=='held') throw new Error('grab did not lock both in place');
+    // it must NOT be instant — a couple frames in (holding punch) you are still winding, enemy still held
+    __key('KeyJ',true);
+    for(let i=0;i<10;i++) __tick(1);
+    if(e.state!=='held') throw new Error('the toss should not be instant — enemy left held too early: '+e.state);
+    // hold through the wind-up → HURL
+    for(let i=0;i<90;i++){ __tick(1); if(e.state==='thrown') break; }
+    if(e.state!=='thrown') throw new Error('holding through the wind-up should hurl the enemy, got '+e.state);
+    // car finishes it
+    g.cars.push({x:e.x-60,dir:1,spd:6,col:'#8b1a2b',lane:348,len:90,horn:false});
+    for(let i=0;i<50 && !e.dead;i++) __tick(1);
+    if(!e.dead||g.night.traffic!==1) throw new Error('car splat should tally traffic, got dead='+e.dead+' traffic='+g.night.traffic);
+    __key('KeyJ',false);
+    // INTERRUPT: start another grab, then get hit mid-windup → grab breaks, enemy NOT thrown
+    g.P.state='idle'; g.P.grabE=null; g.ents.length=0; g.P.iframes=999; e=mk();
+    if(!g.tryGrab()) throw new Error('second grab should start');
+    __key('KeyJ',true); for(let i=0;i<8;i++) __tick(1);
+    if(g.P.state!=='grab') throw new Error('should still be winding the grab');
+    g.P.iframes=0; g.hurtPlayer(20, g.P.x+40, 0);          // someone clocks you mid-grab
+    if(g.P.state==='grab') throw new Error('a hit should knock you out of the grab');
+    if(e.state==='thrown') throw new Error('a broken grab must NOT toss the enemy');
+    __key('KeyJ',false);
+    console.log('        grab locks both → wind-up (not instant) → hurl+splat; hit breaks the grab');
+  });
+  scene('grabbed: an enemy hurls YOU into the street unless you mash out', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=1000; g.P.x=1200; g.P.z=310; g.P.y=0; g.P.state='idle'; g.P.iframes=0;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    const grabYou=()=>{ const e=g.vamp(g.P.x+22,308,false); e.state='grabbing'; e.grabT=0; e.face=-1; g.spawn(e);
+      g.P.state='grabbed'; g.P.grabbedBy=e; g.P.struggle=0; return e; };
+    // DON'T mash → you get tossed into the street (heavy, but you survive)
+    let e=grabYou(); const hp0=g.P.hp;
+    for(let i=0;i<120;i++){ __tick(1); if(g.P.inStreet) break; }
+    if(!g.P.inStreet) throw new Error('failing to mash out should throw you into the street');
+    if(g.P.state!=='down') throw new Error('being tossed should knock you down');
+    if(!(g.P.hp<hp0)) throw new Error('the toss should hurt');
+    if(g.P.hp<=0) throw new Error('the toss must not instantly kill you');
+    // recover fully
+    for(let i=0;i<120;i++){ __tick(1); if(!g.P.inStreet && g.P.state==='idle') break; }
+    if(g.P.inStreet) throw new Error('you should crawl back off the road');
+    // NOW mash out in time → you break free, no toss
+    g.P.hp=g.P.maxhp; g.P.x=1200; g.P.z=310; g.P.state='idle'; g.ents.length=0;
+    e=grabYou();
+    let escaped=false; for(let i=0;i<60;i++){ __key('KeyJ',true); __tick(1); __key('KeyJ',false); __tick(1);
+      if(g.P.state!=='grabbed'){ escaped=true; break; } }
+    if(!escaped) throw new Error('mashing punch should break the enemy grab');
+    if(g.P.inStreet) throw new Error('mashing out should mean you are NOT tossed');
+    console.log('        no mash → tossed into the street (survivable); mash → shook loose');
   });
   scene('scam scales with confidence: broke on a 10/10 empties pockets, confident keeps it', ()=>{
     const g=__G(); g.clearEnts(); g.setCamLock(0);     // camLock non-null suppresses the 'her man' boss side-effect

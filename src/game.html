@@ -1389,26 +1389,60 @@ function connect(e,s){
   return crit;
 }
 
-// ---- TOSS INTO TRAFFIC: at the curb, an adjacent enemy gets shoved off into the street instead of
-//      punched. time it with a passing car and it's a splat. it only exists where the road is. ----
-function atCurb(){ return P.z > FLOOR_S-34 && P.y===0 && P.state!=='down' && P.state!=='caged'; }   // standing near the edge of the sidewalk
-function grabbable(){                                       // nearest live enemy within shove reach of the curb
+// ---- THE GRAB GAME AT THE CURB. it cuts both ways. ----
+//  YOU: hold ↓+punch to grab a mark; you both lock; a wind-up fills; then you HURL them into the street.
+//       you're defenseless the whole time — take a hit and the grab breaks. release early to bail.
+//  THEM: near the curb an enemy can grab YOU. mash punch to break free, or they throw you into traffic.
+const GRAB_WIND=84;          // frames you hold before the toss launches (~1.4s)
+const EGRAB_LEN=82;          // frames an enemy holds you before hurling you into the street
+const EGRAB_ESCAPE=7;        // punch-mashes needed to break their grip
+function atCurb(){ return P.z > FLOOR_S-34 && P.y===0 && P.state!=='down' && P.state!=='caged' && P.state!=='grabbed'; }
+function grabbable(){                                       // nearest live enemy within reach of the curb
   let best=null,bd=1e9;
   for(const e of ents){ if(e.dead||e.k==='boss') continue;
-    if(e.state==='thrown'||e.state==='road') continue;     // already in the street
+    if(e.state==='thrown'||e.state==='road'||e.state==='held'||e.state==='grabbing') continue;
     if(Math.abs(e.x-P.x)<52 && Math.abs(e.z-P.z)<32){ const dd=Math.abs(e.x-P.x); if(dd<bd){ bd=dd; best=e; } } }
   return best;
 }
-function tryToss(){
-  if(!atCurb()) return false;
+function tryGrab(){                                         // begin a grab (↓+punch, held). returns true if it started
+  if(P.state==='grab'||!atCurb()) return false;
   const e=grabbable(); if(!e) return false;
-  P.face = e.x>=P.x?1:-1;                                   // face the mark
-  e.state='thrown'; e.hitstun=0; e.tok=false; e.hitDone=true;
-  e.vx=P.face*rnd(1.4,2.2); e.vy=4.4; e.y=Math.max(e.y,2);  // arc up and out over the road
-  shake=Math.max(shake,4); blip(160,.06); rumble(200,.6,.5,true);
-  say(e.x,e.z-30,'INTO TRAFFIC','#ffb545');
-  P.state='idle'; P.step=0; P.buf=0;                        // this press is spent on the toss, not a punch
+  P.face = e.x>=P.x?1:-1;
+  P.state='grab'; P.grabE=e; P.grabT=0; P.step=0; P.buf=0;
+  e.state='held'; e.tok=false; e.hitstun=999; e.vx=0; e.vy=0;
+  blip(120,.05); rumble(160,.5,.5,true); say(e.x,e.z-30,'GRABBED','#ffb545');
   return true;
+}
+function dropGrab(stun){                                    // let go without tossing
+  const e=P.grabE; if(e){ e.state='stun'; e.hitstun=stun||18; e.y=0; }
+  P.grabE=null; if(P.state==='grab') P.state='idle';
+}
+function launchGrabbed(){                                   // the wind-up completed — HURL them into the street
+  const e=P.grabE; if(!e){ P.state='idle'; return; }
+  e.state='thrown'; e.hitstun=0; e.tok=false; e.hitDone=true;
+  e.vx=P.face*rnd(1.6,2.4); e.vy=4.8; e.y=Math.max(e.y,4);
+  shake=Math.max(shake,6); blip(180,.07); rumble(260,.8,.6,true);
+  say(e.x,e.z-34,'INTO TRAFFIC','#ffb545');
+  P.grabE=null; P.state='idle'; P.step=0; P.buf=0;
+}
+function splatInTraffic(e,c){                               // a car finds a body in the road
+  e.dead=1; e.splat=1; e.vx=Math.sign(c.spd||1)*Math.min(9,Math.abs(c.spd)); e.vy=0; e.y=0;
+  c.honked=true; blip(300,.06); shake=13; hitstop=Math.max(hitstop,11); rumble(520,1,1,true);
+  for(let i=0;i<22;i++) puff(e.x+rnd(-18,18), e.z-rnd(0,10), rnd(0,18), 1, i%3?'#8b1a2b':'#e8e2d4');
+  const loot=e.big?4:e.elite?3:2;
+  for(let i=0;i<loot;i++) drop(e.x+rnd(-22,22), FLOOR_S-4, 'cash');   // payoff lands back on the sidewalk
+  tooth(e.x, FLOOR_S-4);
+  P.conf=Math.min(100,P.conf+(e.big?12:e.elite?9:6));
+  night.traffic=(night.traffic||0)+1;
+  say(e.x,e.z-28,'ROADKILL','#ff2e88');
+}
+// an enemy hurls YOU into the road: heavy, but survivable — i-frames keep a car from finishing you off
+function tossPlayerToStreet(fromX){
+  P.state='down'; P.inStreet=true; P.downT=70; P.iframes=100;
+  P.hp-=Math.round((chinAt()+14)*(1-U.hide*0.12));
+  P.vy=4.0; P.y=Math.max(P.y,4); P.knockV=(P.x<fromX?-1:1)*2.2; P.z=Math.min(ROAD_TARGET,P.z+22);
+  P.drunk=Math.max(0,P.drunk-S_HEAVY); P.grabbedBy=null; P.struggle=0;
+  shake=12; hitstop=8; rumble(460,1,.8,true); say(P.x,P.z-40,'TOSSED','#ff2e88');
 }
 function splatInTraffic(e,c){                               // a car finds a body in the road
   e.dead=1; e.splat=1; e.vx=Math.sign(c.spd||1)*Math.min(9,Math.abs(c.spd)); e.vy=0; e.y=0;
@@ -1592,7 +1626,8 @@ function dateRender(){                                    // crisp overlay on th
 }
 
 function hurtPlayer(dmg,fromX,sober){
-  if(P.iframes>0||OPT.inv||P.state==='caged') return;   // caged = the briefcase slams are the only thing that can touch you
+  if(P.iframes>0||OPT.inv||P.state==='caged'||P.state==='grabbed') return;   // caged/grabbed handle their own damage
+  if(P.state==='grab' && P.grabE){ dropGrab(24); say(P.x,P.z-30,'BROKEN!','#ff2e88'); }   // hit mid-windup → the grab breaks, you eat it
   if(sober) P.drunk=Math.max(0,P.drunk-sober);   // a real hit rattles you toward sober
   // caught mid-sentence. she watched you get hit and you have nothing to say about it.
   const wasTalking = P.state==='talk';
@@ -1694,7 +1729,8 @@ function update(){
   let iz=(key.KeyS||key.ArrowDown?1:0)-(key.KeyW||key.ArrowUp?1:0);
   if(Math.abs(T.ax)>0.01||Math.abs(T.az)>0.01){ ix=T.ax; iz=T.az; }
   if(pad && (Math.abs(PAD.ax)>0||Math.abs(PAD.az)>0)){ ix=PAD.ax; iz=PAD.az; }
-  const wantStreet = iz>0.35;          // holding DOWN, toward the road — the shove modifier
+  const wantStreet = iz>0.35;          // holding DOWN, toward the road — the grab modifier
+  const heldPunch = key.KeyJ || T.A || (PAD.prev&&PAD.prev.PUNCH);   // raw held state, for winding up a grab
   const jPunch=tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH),
         jJump =tap('KeyK')||tapT('B')||(pad&&pad.JUMP),
         jDrink=tap('KeyL')||tapT('C')||(pad&&pad.DRINK),
@@ -1749,7 +1785,8 @@ function update(){
   else if(P.state==='down'){                   // on the pavement. nothing to do but get up.
     P.downT--; P.x+=P.knockV; P.knockV*=0.88;
     if(P.y>0||P.vy>0){ P.y+=P.vy; P.vy-=0.32; if(P.y<=0){P.y=0;P.vy=0;} }
-    if(P.downT<=0){ P.state='idle'; P.iframes=Math.max(P.iframes,26); }
+    if(P.inStreet && P.downT<24) P.z=Math.max(FLOOR_S, P.z-1.6);   // crawl back off the road as you get up
+    if(P.downT<=0){ P.state='idle'; P.iframes=Math.max(P.iframes,26); if(P.inStreet){ P.inStreet=false; P.z=FLOOR_S; } }
   }
   else if(P.state==='talk'){                   // locked in, hands down, back to the street
     P.talkT++;
@@ -1769,6 +1806,25 @@ function update(){
     P.y=0; P.vy=0;
     if(jPunch){ P.struggle=(P.struggle||0)+1; blip(240,.02); }
     if(!P.cageB || P.cageB.dead){ P.state='idle'; P.cageB=null; P.iframes=Math.max(P.iframes,24); }   // he's down → you spill out
+  }
+  else if(P.state==='grab'){                    // you've got a mark by the collar — HOLD to wind up, then hurl
+    const e=P.grabE;
+    if(!e || e.dead){ P.grabE=null; P.state='idle'; }
+    else {
+      e.x=P.x+P.face*24; e.z=P.z; e.y=16; e.face=-P.face; e.hitstun=999;   // hoisted in front of you, locked
+      P.grabT++;
+      if(!heldPunch){ dropGrab(16); say(P.x,P.z-30,'let go','#5c5670'); }   // released early → bail
+      else if(P.grabT>=GRAB_WIND) launchGrabbed();                          // wound up → INTO TRAFFIC
+      else if(P.grabT%6===0) blip(80+P.grabT,.02);
+    }
+  }
+  else if(P.state==='grabbed'){                 // an enemy has YOU — MASH PUNCH to break their grip
+    P.y=0; P.vy=0;
+    if(jPunch){ P.struggle=(P.struggle||0)+1; blip(260,.02);
+      if(P.struggle>=EGRAB_ESCAPE){ const g=P.grabbedBy;                    // shook loose
+        if(g){ g.state='stun'; g.hitstun=30; g.cd=rnd(40,80); }
+        P.grabbedBy=null; P.struggle=0; P.state='idle'; P.iframes=26; say(P.x,P.z-30,'SHOOK LOOSE','#c9d13a'); } }
+    if(!P.grabbedBy || P.grabbedBy.dead){ P.grabbedBy=null; P.struggle=0; P.state='idle'; P.iframes=20; }
   }
   else {
     P.driftPh+=0.016;
@@ -1795,7 +1851,7 @@ function update(){
       if(P.bottles>0){ P.bottles--; P.state='drink'; P.st=0; }
       else { say(P.x,P.z-18,'EMPTY','#5c5670'); blip(90,.02); }
     }
-    if(jPunch && P.y===0 && !(wantStreet && tryToss())){   // DOWN + punch at the curb = shove into the street; a plain punch still combos
+    if(jPunch && P.y===0 && !(wantStreet && tryGrab())){   // DOWN + hold punch at the curb = grab → wind up → toss; a plain punch still combos
       P.state='punch'; P.step=0; P.st=0; P.buf=0; P.stepV=0; P.hitDone=false; P.connected=false;
       let best=null,bd=70;
       for(const e of ents){ if(e.dead)continue; const d=Math.hypot(e.x-P.x,(e.z-P.z)*2);
@@ -1808,7 +1864,7 @@ function update(){
     if(P.y<=0){ P.y=0;P.vy=0;
       if(P.state==='air'){shake=3; puff(P.x,P.z,6,7,'#6b6478'); rumble(220,.85,.4,true);} P.state='idle'; } }
 
-  P.z=clamp(P.z,FLOOR_N,FLOOR_S);
+  P.z=clamp(P.z,FLOOR_N, P.inStreet?ROAD_TARGET+4:FLOOR_S);   // tossed into the road → allowed past the curb until you crawl back
   P.x=clamp(P.x, camLock!==null?camLock+16:8, camLock!==null?camLock+W-24:Infinity);
 
   //---- the controller gets drunk with you: a low hum that grows with the meter
@@ -1853,6 +1909,18 @@ function update(){
       e.x+=e.vx; e.vx*=0.9; e.y+=e.vy; e.vy-=0.34;
       if(e.y<=0){ e.y=0; e.vy=0; e.vx*=0.4; if(Math.abs(e.vx)<0.4){ e.vx=0; e.state='stun'; } }
       e.hitstun--; if(e.hitstun<=0 && e.y===0){ e.state='walk'; e.cd=rnd(30,80); }
+      continue;
+    }
+    if(e.state==='held'){                      // in YOUR grip — the player's grab state drives it
+      if(P.grabE!==e || P.state!=='grab'){ e.state='stun'; e.hitstun=16; e.y=0; }
+      continue;
+    }
+    if(e.state==='grabbing'){                   // it's got YOU — hold, then hurl you into the street unless you mash out
+      e.grabT=(e.grabT||0)+1; e.anim+=0.04;
+      if(P.state==='grabbed' && P.grabbedBy===e){
+        P.x=e.x+e.face*22; P.z=e.z; P.face=-e.face;
+        if(e.grabT>=EGRAB_LEN){ tossPlayerToStreet(e.x); e.state='stun'; e.hitstun=26; e.cd=rnd(70,130); }
+      } else { e.state='stun'; e.hitstun=20; e.cd=rnd(40,80); }   // you broke loose
       continue;
     }
     if(e.state==='thrown'){                     // shoved off the curb — sailing out over the road
@@ -1910,6 +1978,14 @@ function update(){
     e.cd -= (P.state==='talk' ? 2.5 : 1);       // your back is turned and they know it
     if(e.fire && d<(e.big?150:105) && d>(e.big?40:26) && e.cd<=0 && (e.tok||toks<2)){
       if(!e.tok){e.tok=true;toks++;} e.state='breathe'; e.st=0;
+    }
+    // at the curb they'll GRAB you and try to throw you into the road — mash out or you're the one splatted
+    else if(e.k==='vamp' && !e.fire && P.z>FLOOR_S-40 && d<40 && e.cd<=0 && (e.tok||toks<2)
+            && P.iframes<=0 && !OPT.inv && (P.state==='idle'||P.state==='walk'||P.state==='punch') && Math.random()<0.5){
+      if(!e.tok){e.tok=true;toks++;}
+      e.state='grabbing'; e.grabT=0; e.face=dx>0?1:-1;
+      P.state='grabbed'; P.grabbedBy=e; P.struggle=0; P.step=0; P.buf=0; P.talkN=null;
+      blip(140,.06); rumble(200,.6,.5,true); say(e.x,e.z-40,'GOTCHA','#ff2e88');
     }
     else if(d<(e.k==='rat'?(e.big?40:26):44) && e.cd<=0 && (e.tok||toks<2)){
       if(!e.tok){e.tok=true;toks++;} e.state='atk'; e.st=0; e.hitDone=false;
@@ -2038,6 +2114,7 @@ function respawn(){
   P.hp=P.maxhp; P.drunk=0; P.x=Math.max(20,camX+40); P.z=300; P.y=0; P.vy=0; P.state='idle';
   P.step=0; P.buf=0; P.talkN=null; P.downT=0; P.iframes=110;
   P.cageB=null; P.struggle=0; if(boss) boss.caged=false;   // spring the briefcase if you died inside it
+  P.grabE=null; P.grabbedBy=null; P.inStreet=false;        // clear any grab in progress
   fires=[];
   for(const e of ents){ if(e.dead) continue;
     e.tok=false; e.hitstun=0; e.hitDone=true;
@@ -2913,7 +2990,19 @@ function drawPlayer(){
   ctx.globalAlpha=1;
   // combo counter floats on you, not in the corner — you're looking at your guy
   if(P.state==='punch'&&P.step>0){ ctx.font='bold 9px "JetBrains Mono",monospace'; ctx.textAlign='center';
-    ctx.fillStyle= P.step===3?'#ffb545':'#c9d13a'; ctx.fillText((P.step+1)+' HIT',P.x-camX,P.z-92); } }
+    ctx.fillStyle= P.step===3?'#ffb545':'#c9d13a'; ctx.fillText((P.step+1)+' HIT',P.x-camX,P.z-92); }
+  // grab wind-up: you're hoisting a mark — the meter fills, then you hurl. you're wide open until it does.
+  if(P.state==='grab'){ const sx=P.x-camX, prog=clamp(P.grabT/GRAB_WIND,0,1);
+    ctx.fillStyle='#2a2436'; ctx.fillRect(sx-14,P.z-96,28,4);
+    ctx.fillStyle= prog>.85?'#ff2e88':'#ffb545'; ctx.fillRect(sx-14,P.z-96,28*prog,4);
+    ctx.fillStyle='#ffb545'; ctx.font='bold 8px "JetBrains Mono",monospace'; ctx.textAlign='center';
+    if(t%16<11) ctx.fillText(prog>=1?'HURL!':'HOLD…', sx, P.z-100); }
+  // an enemy has you — MASH prompt + escape meter
+  if(P.state==='grabbed'){ const sx=P.x-camX, got=clamp((P.struggle||0)/EGRAB_ESCAPE,0,1);
+    ctx.fillStyle='#2a2436'; ctx.fillRect(sx-14,P.z-96,28,4);
+    ctx.fillStyle='#c9d13a'; ctx.fillRect(sx-14,P.z-96,28*got,4);
+    ctx.fillStyle='#ff2e88'; ctx.font='bold 9px "JetBrains Mono",monospace'; ctx.textAlign='center';
+    if(t%12<8) ctx.fillText('MASH!', sx, P.z-100); } }
 
 function drawDrop(d){ const sx=d.x-camX, y=d.z-d.y; shadow(d.x,d.z,5);
   if(d.kind==='tooth'){ ctx.fillStyle='#f4efe2'; ctx.fillRect(sx-2,y-3,4,5); ctx.fillStyle='#c9c2ae'; ctx.fillRect(sx-2,y+1,4,1); }
@@ -3092,10 +3181,10 @@ function render(){
   drawCars();
 
   // curb prompt: a staggered mark within reach of the street can be shoved into it
-  if(!dateOn && !boss){ const g=grabbable();
+  if(!dateOn && !boss && P.state!=='grab'){ const g=grabbable();
     if(g && atCurb()){ const carSoon=cars.some(c=>Math.sign(c.spd)===Math.sign(g.x-c.x) && Math.abs(c.x-g.x)<180);
       ctx.textAlign='center'; ctx.font='bold 9px "JetBrains Mono",monospace';
-      ctx.fillStyle= carSoon?'#ff2e88':'#ffb545'; if(t%20<15) ctx.fillText(carSoon?'↓ SHOVE! →':'↓ SHOVE INTO TRAFFIC', g.x-camX, g.z-58);
+      ctx.fillStyle= carSoon?'#ff2e88':'#ffb545'; if(t%20<15) ctx.fillText(carSoon?'HOLD ↓ GRAB →':'HOLD ↓ GRAB', g.x-camX, g.z-58);
       ctx.strokeStyle=ctx.fillStyle; ctx.lineWidth=1; ctx.globalAlpha=.5+.3*Math.sin(t*.3);
       ctx.strokeRect(g.x-camX-g.w, g.z-g.d, g.w*2, g.d*2); ctx.globalAlpha=1; } }
 
