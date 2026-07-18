@@ -75,7 +75,7 @@ global.setTimeout=(f)=>{ try{f();}catch(e){} return 0; };  // waves spawn inline
 const driver = `
 ;globalThis.__G=()=>({
    get P(){return P}, get ents(){return ents}, get crowd(){return crowd}, get npcs(){return npcs},
-   get drops(){return drops}, get fires(){return fires}, get cans(){return cans},
+   get drops(){return drops}, get fires(){return fires}, get cans(){return cans}, get cars(){return cars},
    get BUILDINGS(){return BUILDINGS}, get GATES(){return GATES}, get U(){return U},
    get UPG(){return UPG}, get COMBO(){return COMBO}, get camX(){return camX},
    get boss(){return boss}, get camLock(){return camLock},
@@ -86,6 +86,7 @@ const driver = `
    setCamLock:(v)=>{ camLock=v; camX=v; }, setBest:(v)=>{ best=v; }, setLives:(v)=>{ lives=v; },
    releaseArena:()=>{ ents.length=0; camLock=null; boss=null; bossDone=0; hitstop=0; dateOn=false; date=null; fires.length=0; },
    rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
+   tryToss,grabbable,atCurb,splatInTraffic,
    genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate,
    buyContinue,callItNight,clutchRevive,continueCost,confFloor});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
@@ -359,6 +360,27 @@ if(!err){
     let everCaged=false; for(let i=0;i<30;i++){ __tick(1); __draw(); if(g.P.state==='caged') everCaged=true; }
     if(everCaged) throw new Error('a far-away grab should whiff, not cage');
     console.log('        lockup cages + bangs you; out-of-range whiffs');
+  });
+  scene('toss into traffic: shove a staggered mark off the curb, a car splats it for the bounty', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=1200; g.P.z=310; g.P.y=0; g.P.state='idle'; g.P.iframes=999;   // standing at the curb edge
+    g.setCamLock(Math.max(0,g.P.x-170));                  // lock the arena so nothing spawns/culls under us
+    g.night.traffic=0;
+    // a staggered enemy right next to you at the curb
+    const e=g.vamp(g.P.x+24, 308, false); e.state='stun'; e.hitstun=40; g.spawn(e);
+    if(!g.grabbable()) throw new Error('a staggered mark at the curb should be grabbable');
+    if(!g.atCurb()) throw new Error('player at z=310 should count as at the curb');
+    if(!g.tryToss()) throw new Error('tryToss should fire at the curb');
+    if(e.state!=='thrown') throw new Error('the shove should throw the enemy, got '+e.state);
+    // let them sail out onto the road
+    let onRoad=false; for(let i=0;i<40;i++){ __tick(1); if(e.z>=316){ onRoad=true; } if(e.dead) break; }   // CURB=316
+    if(!onRoad && !e.dead) throw new Error('the thrown enemy never reached the road');
+    // send a car through their lane → splat
+    if(!e.dead){ g.cars.push({x:e.x-60, dir:1, spd:6, col:'#8b1a2b', lane:348, len:90, horn:false});
+      for(let i=0;i<40 && !e.dead;i++){ __tick(1); } }
+    if(!e.dead) throw new Error('the car did not splat the enemy in the road');
+    if(g.night.traffic!==1) throw new Error('a traffic kill should tally on the night, got '+g.night.traffic);
+    console.log('        curb shove → road → car splat → +1 traffic');
   });
   scene('scam scales with confidence: broke on a 10/10 empties pockets, confident keeps it', ()=>{
     const g=__G(); g.clearEnts(); g.setCamLock(0);     // camLock non-null suppresses the 'her man' boss side-effect

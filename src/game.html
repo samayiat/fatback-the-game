@@ -488,7 +488,7 @@ function clutchRevive(){ builtOn=false; $('builtdiff').classList.remove('on');
   P.conf=confFloor();                                    // you spent your confidence to lock in
   say(P.x,P.z-30,'BUILT DIFFERENT','#ff2e88'); shake=12; rumble(700,1,1,true); }
 $('builtLock').onclick=clutchRevive;
-function nightScore(){ return Math.round(P.x/16) + night.bosses*300 + night.women*75 + night.cash; }
+function nightScore(){ return Math.round(P.x/16) + night.bosses*300 + night.women*75 + night.traffic*150 + night.cash; }
 function showRecap(reason){
   dawnShown=true;
   const sc=nightScore(), isBest=sc>bestScore;
@@ -496,7 +496,7 @@ function showRecap(reason){
   $('recapHead').textContent = reason==='dawn' ? "LAST CALL — YOU MADE THE NIGHT" : "THEY RAN YOU OUT";
   $('recapStats').innerHTML =
     'DISTANCE <b>'+Math.round(P.x/16)+'m</b>  ·  BOSSES <b>'+night.bosses+'</b>  ·  WOMEN <b>'+night.women+'</b><br>'+
-    'CASH <b>$'+night.cash+'</b>  ·  DEATHS <b>'+P.deaths+'</b>  ·  CONTINUES <b>'+continues+'</b>';
+    'TRAFFIC <b>'+night.traffic+'</b>  ·  CASH <b>$'+night.cash+'</b>  ·  DEATHS <b>'+P.deaths+'</b>  ·  CONTINUES <b>'+continues+'</b>';
   $('recapScore').innerHTML = 'NIGHT SCORE <b>'+sc+'</b>'+(isBest?'  <span style="color:#c9d13a">NEW BEST!</span>':'  ·  BEST '+bestScore);
   $('recap').classList.add('on');
 }
@@ -606,7 +606,7 @@ $('touch').classList.remove('on');   // hidden until PRESS START
 //====================== helpers ======================
 const rnd=(a,b)=>a+Math.random()*(b-a);
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
-const FLOOR_N=228, FLOOR_S=312, CURB=316, ROAD=320;
+const FLOOR_N=228, FLOOR_S=312, CURB=316, ROAD=320, ROAD_TARGET=340;   // ROAD_TARGET: where a shoved enemy sails out to, in the lanes
 
 let debugFD='';
 
@@ -713,7 +713,7 @@ let dateOn=false, date=null;               // the rhythm date mini-game
 // THE NIGHT: the run is one night. dawn (or getting run out of lives) ends it on a scored recap.
 const DAWN_X=32000;                         // ~2000m / ~8 bosses is a full night
 let lives=3, continues=0;                   // 3 lives, then pay to continue
-let night={bosses:0,women:0,cash:0,reach:0}; // recap tally + furthest reached THIS night (drives the dawn clock)
+let night={bosses:0,women:0,cash:0,reach:0,traffic:0}; // recap tally + furthest reached THIS night (drives the dawn clock)
 let dawnShown=false, continueOn=false, builtOn=false;   // freeze flags: recap / continue prompt / clutch revive
 const CONTINUE_COSTS=[50,100,250];          // then $500 every time after
 const continueCost=()=> CONTINUE_COSTS[continues]!==undefined?CONTINUE_COSTS[continues]:500;
@@ -730,7 +730,7 @@ function reset(){
 
   ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;camFlash=0;
   boss=null; bossDone=0; bossDeaths=0; bossNagged=false; gauntlet=0; gauntletIx=0; dateOn=false; date=null; $('touch').classList.remove('dating');
-  lives=3; continues=0; night={bosses:0,women:0,cash:0,reach:0}; dawnShown=false;   // fresh night
+  lives=3; continues=0; night={bosses:0,women:0,cash:0,reach:0,traffic:0}; dawnShown=false;   // fresh night
   cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[]; props=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
   best=Math.max(best||0, 0);
@@ -1389,6 +1389,39 @@ function connect(e,s){
   return crit;
 }
 
+// ---- TOSS INTO TRAFFIC: at the curb, a staggered enemy can be shoved off into the street.
+//      time it with a passing car and it's a splat. it only exists where the road is — pure context. ----
+function atCurb(){ return P.z > FLOOR_S-26 && P.y===0 && P.state!=='down' && P.state!=='caged'; }   // standing on the edge of the sidewalk
+function grabbable(){                                       // nearest live, staggered enemy in shove range
+  let best=null,bd=1e9;
+  for(const e of ents){ if(e.dead||e.k==='boss') continue;
+    if(!(e.hitstun>0 || e.state==='stun' || e.state==='launch')) continue;   // has to be rocked first
+    if(Math.abs(e.x-P.x)<46 && Math.abs(e.z-P.z)<28){ const dd=Math.abs(e.x-P.x); if(dd<bd){ bd=dd; best=e; } } }
+  return best;
+}
+function tryToss(){
+  if(!atCurb()) return false;
+  const e=grabbable(); if(!e) return false;
+  P.face = e.x>=P.x?1:-1;                                   // face the mark
+  e.state='thrown'; e.hitstun=0; e.tok=false; e.hitDone=true;
+  e.vx=P.face*rnd(1.4,2.2); e.vy=4.4; e.y=Math.max(e.y,2);  // arc up and out over the road
+  shake=Math.max(shake,4); blip(160,.06); rumble(200,.6,.5,true);
+  say(e.x,e.z-30,'INTO TRAFFIC','#ffb545');
+  P.state='idle'; P.step=0; P.buf=0;                        // this press is spent on the toss, not a punch
+  return true;
+}
+function splatInTraffic(e,c){                               // a car finds a body in the road
+  e.dead=1; e.splat=1; e.vx=Math.sign(c.spd||1)*Math.min(9,Math.abs(c.spd)); e.vy=0; e.y=0;
+  c.honked=true; blip(300,.06); shake=13; hitstop=Math.max(hitstop,11); rumble(520,1,1,true);
+  for(let i=0;i<22;i++) puff(e.x+rnd(-18,18), e.z-rnd(0,10), rnd(0,18), 1, i%3?'#8b1a2b':'#e8e2d4');
+  const loot=e.big?4:e.elite?3:2;
+  for(let i=0;i<loot;i++) drop(e.x+rnd(-22,22), FLOOR_S-4, 'cash');   // payoff lands back on the sidewalk
+  tooth(e.x, FLOOR_S-4);
+  P.conf=Math.min(100,P.conf+(e.big?12:e.elite?9:6));
+  night.traffic=(night.traffic||0)+1;
+  say(e.x,e.z-28,'ROADKILL','#ff2e88');
+}
+
 // low confidence = easy mark. broke and shaky in front of a 10/10 and she cleans you out;
 // riding high you read people and keep your wallet. predisposed scammers always take at least a cut.
 function scamOutcome(n,app,score){
@@ -1761,7 +1794,8 @@ function update(){
       if(P.bottles>0){ P.bottles--; P.state='drink'; P.st=0; }
       else { say(P.x,P.z-18,'EMPTY','#5c5670'); blip(90,.02); }
     }
-    if(jPunch && P.y===0){ P.state='punch'; P.step=0; P.st=0; P.buf=0; P.stepV=0; P.hitDone=false; P.connected=false;
+    if(jPunch && P.y===0 && !tryToss()){   // at the curb, a staggered mark gets shoved into the street instead
+      P.state='punch'; P.step=0; P.st=0; P.buf=0; P.stepV=0; P.hitDone=false; P.connected=false;
       let best=null,bd=70;
       for(const e of ents){ if(e.dead)continue; const d=Math.hypot(e.x-P.x,(e.z-P.z)*2);
         if(d<bd){bd=d;best=e;} }
@@ -1818,6 +1852,25 @@ function update(){
       e.x+=e.vx; e.vx*=0.9; e.y+=e.vy; e.vy-=0.34;
       if(e.y<=0){ e.y=0; e.vy=0; e.vx*=0.4; if(Math.abs(e.vx)<0.4){ e.vx=0; e.state='stun'; } }
       e.hitstun--; if(e.hitstun<=0 && e.y===0){ e.state='walk'; e.cd=rnd(30,80); }
+      continue;
+    }
+    if(e.state==='thrown'){                     // shoved off the curb — sailing out over the road
+      e.x+=e.vx; e.vx*=0.99; e.y+=e.vy; e.vy-=0.3; e.anim+=0.2;
+      if(e.z<ROAD_TARGET) e.z=Math.min(ROAD_TARGET, e.z+2.6);
+      if(e.z>=CURB) for(const c of cars){ if(Math.abs(c.x-e.x)<c.len/2+14){ splatInTraffic(e,c); break; } }
+      if(e.dead) continue;
+      if(e.y<=0){ e.y=0; e.vy=0; e.vx*=0.3;
+        if(e.z>=CURB){ e.state='road'; e.roadT=0; }        // sprawled on the asphalt
+        else { e.state='stun'; e.hitstun=18; } }            // came up short, back on the curb
+      continue;
+    }
+    if(e.state==='road'){                        // down in the lane — a car can still finish the job
+      e.roadT++;
+      for(const c of cars){ if(Math.abs(c.x-e.x)<c.len/2+14){ splatInTraffic(e,c); break; } }
+      if(e.dead) continue;
+      if(e.roadT>80){ e.z-=1.5;                   // no car came — crawl back up onto the sidewalk, scraped up
+        if(e.z<=FLOOR_S){ e.z=FLOOR_S; e.state='stun'; e.hitstun=26; e.hp-=10; say(e.x,e.z-24,'ROAD RASH','#8b8496');
+          if(e.hp<=0&&!e.dead){ e.dead=1; P.conf=Math.min(100,P.conf+2); } } }
       continue;
     }
     if(e.state==='enter'){                     // walking out of the door into the street
@@ -3036,6 +3089,14 @@ function render(){
   drawPhotoFrame();                              // the tourist's viewfinder telegraph
   drawLitter();
   drawCars();
+
+  // curb prompt: a staggered mark within reach of the street can be shoved into it
+  if(!dateOn && !boss){ const g=grabbable();
+    if(g && atCurb()){ const carSoon=cars.some(c=>Math.sign(c.spd)===Math.sign(g.x-c.x) && Math.abs(c.x-g.x)<180);
+      ctx.textAlign='center'; ctx.font='bold 9px "JetBrains Mono",monospace';
+      ctx.fillStyle= carSoon?'#ff2e88':'#ffb545'; if(t%20<15) ctx.fillText(carSoon?'SHOVE! →':'SHOVE INTO TRAFFIC', g.x-camX, g.z-58);
+      ctx.strokeStyle=ctx.fillStyle; ctx.lineWidth=1; ctx.globalAlpha=.5+.3*Math.sin(t*.3);
+      ctx.strokeRect(g.x-camX-g.w, g.z-g.d, g.w*2, g.d*2); ctx.globalAlpha=1; } }
 
   if(OPT.hb){ ctx.strokeStyle='#3ad1ff'; ctx.lineWidth=1;
     for(const e of ents){ if(e.dead)continue; ctx.strokeRect(e.x-camX-e.w,e.z-e.d,e.w*2,e.d*2); }
