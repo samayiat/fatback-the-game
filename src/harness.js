@@ -92,6 +92,7 @@ const driver = `
    releaseArena:()=>{ ents.length=0; camLock=null; boss=null; bossDone=0; hitstop=0; dateOn=false; date=null; fires.length=0; },
    rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
    tryGrab,grabbable,atCurb,splatInTraffic,dropGrab,launchGrabbed,tossPlayerToStreet,
+   throwWeapon,drop, get WEAPONS(){return WEAPONS},
    genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate,
    buyContinue,callItNight,clutchRevive,continueCost,confFloor});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
@@ -127,8 +128,8 @@ if(MISSING.length) console.log('ids requested but NOT in markup: '+[...new Set(M
 function scene(name, fn){
   // clear any grab/street residue a prior scene's sim may have left on the player, so scenes stay independent
   try{ const g=globalThis.__G();
-    if(['grab','grabbed','caged'].includes(g.P.state)) g.P.state='idle';
-    g.P.grabE=null; g.P.grabbedBy=null; g.P.cageB=null; g.P.inStreet=false; }catch(e){}
+    if(['grab','grabbed','caged','wthrow','punch'].includes(g.P.state)) g.P.state='idle';
+    g.P.grabE=null; g.P.grabbedBy=null; g.P.cageB=null; g.P.inStreet=false; g.P.weapon=null; }catch(e){}
   try{ fn(); console.log('  ok    '+name); }
   catch(e){ console.log('  FAIL  '+name+'\n        '+e.constructor.name+': '+e.message+
     '\n        '+(e.stack||'').split('\n')[1].trim()); err=err||e; }
@@ -427,6 +428,81 @@ if(!err){
     if(!escaped) throw new Error('mashing punch should break the enemy grab');
     if(g.P.inStreet) throw new Error('mashing out should mean you are NOT tossed');
     console.log('        no mash → tossed into the street (survivable); mash → shook loose');
+  });
+  scene('weapon: walk over a pipe to equip; a second is left on the ground while armed', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=1200; g.P.z=260; g.P.y=0; g.P.state='idle'; g.P.weapon=null; g.P.iframes=0;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.drop(g.P.x, g.P.z, 'weapon', 'pipe'); const wd=g.drops[g.drops.length-1];
+    for(let i=0;i<50 && !wd.land;i++) __tick(1);          // let it settle
+    g.P.x=wd.x; g.P.z=wd.z;                                // stand on it
+    for(let i=0;i<10 && !g.P.weapon;i++) __tick(1);
+    if(!g.P.weapon || g.P.weapon.type!=='pipe') throw new Error('walking over a pipe should equip it');
+    if(g.P.weapon.dur!==g.WEAPONS.pipe.dur) throw new Error('pipe should start at full durability');
+    g.drop(g.P.x, g.P.z, 'weapon', 'bottle'); const wd2=g.drops[g.drops.length-1];
+    for(let i=0;i<50 && !wd2.land;i++) __tick(1); for(let i=0;i<10;i++) __tick(1);
+    if(g.P.weapon.type!=='pipe') throw new Error('a second weapon must not swap what you are holding');
+    if(!g.drops.some(d=>d.kind==='weapon')) throw new Error('the un-picked weapon should stay on the ground');
+    console.log('        equipped the pipe; second weapon left on the ground');
+  });
+  scene('weapon: swing hits harder than a fist, wears out, and breaks', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=1200; g.P.z=260; g.P.y=0; g.P.state='idle'; g.P.iframes=99999; g.P.drunk=0; g.P.face=1;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    const mk=()=>{ const e=g.vamp(g.P.x+30,260,false,false); e.state='walk'; e.hitstun=0; e.hp=e.maxhp=1000; g.spawn(e); return e; };
+    const swing=()=>{ __key('KeyJ',true); __tick(1); __key('KeyJ',false); for(let i=0;i<22;i++) __tick(1); };
+    let e=mk(); g.P.weapon=null; let hp0=e.hp; swing(); const unarmed=hp0-e.hp;
+    if(!(unarmed>0)) throw new Error('unarmed jab did not connect ('+unarmed+')');
+    g.ents.length=0; e=mk(); g.P.weapon={type:'pipe',dur:g.WEAPONS.pipe.dur}; hp0=e.hp; const dur0=g.P.weapon.dur; swing();
+    const armed=hp0-e.hp;
+    if(!(armed>unarmed)) throw new Error('armed swing should hit harder: '+armed+' vs '+unarmed);
+    if(!(g.P.weapon && g.P.weapon.dur===dur0-1)) throw new Error('a connecting swing should spend one durability');
+    let guard=0; while(g.P.weapon && guard++<40){ g.ents.length=0; mk(); swing(); }
+    if(g.P.weapon) throw new Error('the pipe should break after enough swings');
+    console.log('        pipe: '+Math.round(armed)+' dmg vs fist '+Math.round(unarmed)+', wore out and broke');
+  });
+  scene('weapon: a bottle shatters on the first hit', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=1200; g.P.z=260; g.P.y=0; g.P.state='idle'; g.P.iframes=99999; g.P.drunk=0; g.P.face=1;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    const e=g.vamp(g.P.x+28,260,false,false); e.state='walk'; e.hp=e.maxhp=1000; g.spawn(e);
+    g.P.weapon={type:'bottle',dur:g.WEAPONS.bottle.dur};
+    __key('KeyJ',true); __tick(1); __key('KeyJ',false); for(let i=0;i<22;i++) __tick(1);
+    if(g.P.weapon) throw new Error('a bottle (dur 1) should shatter on the first connect');
+    console.log('        bottle shattered on contact');
+  });
+  scene('weapon: HOLD punch winds up and hurls it; a quick tap just swings', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=1200; g.P.z=260; g.P.y=0; g.P.state='idle'; g.P.iframes=99999; g.P.face=1;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    const e=g.vamp(g.P.x+90,260,false,false); e.state='walk'; e.hp=e.maxhp=1000; g.spawn(e); const hp0=e.hp;
+    g.P.weapon={type:'pipe',dur:g.WEAPONS.pipe.dur};
+    __key('KeyJ',true);                                    // press and KEEP holding
+    let sawFire=false; for(let i=0;i<50 && g.P.weapon;i++){ __tick(1); if(g.fires.some(f=>f.weapon)) sawFire=true; }
+    __key('KeyJ',false);
+    if(g.P.weapon) throw new Error('holding punch should wind up and hurl the weapon');   // hands emptied → it left
+    for(let i=0;i<50 && e.hp===hp0;i++) __tick(1);
+    if(!(e.hp<hp0)) throw new Error('the thrown weapon should hit an enemy in its path');
+    // quick TAP must swing, not throw
+    g.ents.length=0; g.P.weapon={type:'pipe',dur:g.WEAPONS.pipe.dur};
+    g.P.state='idle'; g.P.wcommit=false; g.P.wthrowT=0;
+    __key('KeyJ',false); __tick(1);                        // clean neutral frame, then a quick tap
+    __key('KeyJ',true); __tick(1); __key('KeyJ',false);
+    for(let i=0;i<24;i++){ __tick(1); if(g.P.wcommit) throw new Error('a quick tap must not commit a throw'); }
+    if(!g.P.weapon) throw new Error('a tap (air swing, no enemy) should not throw the weapon away');
+    if(g.fires.some(f=>f.weapon)) throw new Error('a tap must not spawn a thrown weapon');
+    console.log('        hold → hurl + hit; tap → swing (kept the weapon)');
+  });
+  scene('weapon: a knockdown makes you drop it on the street', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=2000; g.P.x=1200; g.P.z=260; g.P.y=0; g.P.state='idle'; g.P.iframes=0;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.P.weapon={type:'pipe',dur:g.WEAPONS.pipe.dur};
+    const before=g.drops.filter(d=>d.kind==='weapon').length;
+    g.hurtPlayer(999, g.P.x+30, 0);                        // 999 >= chin → knockdown
+    if(g.P.weapon) throw new Error('a knockdown should knock the weapon out of your hands');
+    if(g.drops.filter(d=>d.kind==='weapon').length<=before) throw new Error('the dropped weapon should land on the street');
+    console.log('        knocked down → dropped the pipe');
   });
   scene('scam scales with confidence: broke on a 10/10 empties pockets, confident keeps it', ()=>{
     const g=__G(); g.clearEnts(); g.setCamLock(0);     // camLock non-null suppresses the 'her man' boss side-effect
