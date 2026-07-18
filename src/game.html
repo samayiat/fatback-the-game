@@ -3520,21 +3520,28 @@ function titleRender(){
 
 async function startCoop(){
   console.log("startCoop called, Playroom defined?", typeof Playroom !== "undefined");
-  if(typeof Playroom === "undefined") { console.log("Playroom undefined, falling back to solo"); return startSolo(); }
+  if(typeof Playroom === "undefined") { console.error("Playroom undefined, falling back to solo"); return startSolo(); }
   MP = true;
   try {
-    console.log("Calling insertCoin...");
-    await Playroom.insertCoin({ maxPlayersPerRoom: 4, matchmaking: true });
-    console.log("insertCoin succeeded");
+    console.log("Calling insertCoin with matchmaking...");
+    console.log("Playroom object:", typeof Playroom);
+    await Playroom.insertCoin({
+      matchmaking: true,
+      maxPlayersPerRoom: 4
+      // Note: gameId may be optional or loaded from env
+    });
+    console.log("✓ insertCoin succeeded, setting up event handlers");
     Playroom.onPlayerJoin((state) => {
-      console.log("Player joined:", state.id);
+      console.log("✓ Player joined:", state.id);
       if(state.id === Playroom.myPlayer().id) return;  // skip self
       others.push(state);
       state.onQuit(() => others.splice(others.indexOf(state), 1));
     });
+    console.log("✓ Event handlers ready, starting game");
     startGame();
   } catch(e) {
-    console.error("PlayroomKit error:", e);
+    console.error("✗ PlayroomKit error:", e.message || e);
+    console.error("Error details:", e);
     startSolo();
   }
 }
