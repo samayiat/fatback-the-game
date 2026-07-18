@@ -775,6 +775,10 @@ const cStep=()=>COMBO[P.step];
 
 //====================== STREET WEAPONS ======================
 // pick one off the block: swing it (heavier, wears out) or HOLD punch to hurl it.
+// PARKED: the swing/throw/draw all work, but the held + ground art is placeholder rects that don't
+// match the sprite work — so acquisition is OFF until we have real weapon sprites. Flip this to true
+// (and the code + harness scenes all come back to life) once the art exists.
+const WEAPONS_ON=false;
 const WEAPONS={
   pipe:  {name:'PIPE',   dur:5, mult:1.9, reach:14, push:10, launch:true,  stun:40, y:3.0, throwDmg:26, col:'#9aa0ab', dark:'#4a4e57'},
   bottle:{name:'BOTTLE', dur:1, mult:1.7, reach:6,  push:5,  launch:false, stun:26, y:0,   throwDmg:16, col:'#2f7a3f', dark:'#173a1e'},
@@ -1397,7 +1401,7 @@ function connect(e,s){
     if(e.k==='vamp'){ Math.random()<0.28?drop(e.x,e.z,'jameson'):drop(e.x,e.z,'cash');
       if(e.elite){ drop(e.x+rnd(-10,10),e.z,'cash'); tooth(e.x,e.z); rumble(300,1,1,true); } }
     if(e.k!=='rat' && Math.random()<0.06) drop(e.x+rnd(-14,14),e.z,'burger'); // rare — a burger's worth buying
-    if(e.k==='vamp' && Math.random()<0.08) drop(e.x+rnd(-12,12),e.z,'weapon','bottle'); }  // sometimes he was holding a bottle
+    if(e.k==='vamp' && Math.random()<0.08 && WEAPONS_ON) drop(e.x+rnd(-12,12),e.z,'weapon','bottle'); }  // sometimes he was holding a bottle (parked — see WEAPONS_ON)
   return crit;
 }
 
@@ -2028,7 +2032,7 @@ function update(){
         if(c.hp<=0){ c.dead=true; puff(c.x,c.z,20,c.type==='dumpster'?16:10,'#6b6478'); const r=Math.random();
           const trash = c.type==='can'||c.type==='dumpster';        // rats nest in the trash, not the crates
           if(r<0.34 && trash){ for(let i=0;i<(c.type==='dumpster'?4:3);i++) ents.push(rat(c.x+rnd(-10,10),c.z)); say(c.x,c.z,'RATS','#7d7791'); }
-          else if(r<0.60){ const wt = trash?'bottle':'pipe'; drop(c.x,c.z,'weapon',wt); say(c.x,c.z,WEAPONS[wt].name+'!','#ffb545'); }   // ~26% a street weapon (crates→pipe, trash→bottle)
+          else if(WEAPONS_ON && r<0.60){ const wt = trash?'bottle':'pipe'; drop(c.x,c.z,'weapon',wt); say(c.x,c.z,WEAPONS[wt].name+'!','#ffb545'); }   // ~26% a street weapon (parked — see WEAPONS_ON)
           else if(r<0.88) drop(c.x,c.z,'cash'); else drop(c.x,c.z,'jameson');   // mostly cash — bottles are rarer now
           if(c.type==='dumpster') drop(c.x+rnd(-10,10),c.z,'cash'); } } } }   // dumpsters pay out extra
   for(const c of cans) if(c.shake>0)c.shake--;
