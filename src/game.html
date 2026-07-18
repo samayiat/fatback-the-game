@@ -885,9 +885,9 @@ function spawnWave(T){
 //====================== bosses ======================
 // every 250m the street clears and a giant procedural monster rises. three archetypes,
 // each rolled fresh from the boss number so no two encounters are the same.
-const BOSS_ARCH=['ratking','bouncer','crawler','deli','subway','halal','auteur','tourist'];
+const BOSS_ARCH=['ratking','bouncer','crawler','deli','subway','halal','auteur','tourist','lawyer'];
 const BOSS_NAME={ratking:'THE RAT KING',bouncer:'THE BOUNCER',crawler:'THE CRAWLER',deli:'THE DELI MAN',
-  subway:'THE TRACK WORKER',halal:'THE CART MAN',auteur:'THE AUTEUR',tourist:'THE TOURIST'};
+  subway:'THE TRACK WORKER',halal:'THE CART MAN',auteur:'THE AUTEUR',tourist:'THE TOURIST',lawyer:'THE LAWYER'};
 const BOSS_PAL={
   ratking:{body:'#4a3a2c',dark:'#2b2016',glow:'#ff5a2e'},
   bouncer:{body:'#3a3d4a',dark:'#22242e',glow:'#ff2e88'},
@@ -897,10 +897,11 @@ const BOSS_PAL={
   halal:{body:'#c4302b',dark:'#2a2622',glow:'#ff8c1a'},  // red cart, char-grey, flame-orange weak point
   auteur:{body:'#1c1c20',dark:'#0e0e12',glow:'#e23b3b'}, // all black — turtleneck & beret — viewfinder-red eye
   tourist:{body:'#f0ece0',dark:'#3f8f5a',glow:'#fdf4c8'},// white tee, cargo-shorts green, camera-flash white
+  lawyer:{body:'#2a2c34',dark:'#15161c',glow:'#e0483a'}, // charcoal suit, near-black, power-red tie/objection-red
 };
 // 'repel' is NOT in the random rotation — it only fires as the mash-punish (see connect()), so no
 // regular move ever tanks your drunk straight to zero. Regular hits sober you a little; heavy hits a lot.
-const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep'],deli:['boot'],subway:['kick'],halal:['skewer'],auteur:['clap','tornado'],tourist:['photo']};
+const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep'],deli:['boot'],subway:['kick'],halal:['skewer'],auteur:['clap','tornado'],tourist:['photo'],lawyer:['subpoena','gavel']};
 const bossInv=b=>{                                 // i-frames: can't be traded through
   if(b.state==='intro') return true;
   if(b.arch==='deli'){
@@ -912,6 +913,7 @@ const bossInv=b=>{                                 // i-frames: can't be traded 
   if(b.arch==='halal')  return b.state==='duck'||b.state==='wind'||b.state==='attack';   // ducked behind the cart = shielded
   if(b.arch==='auteur') return b.state==='wind'||b.state==='attack';   // NB 'tidy' is deliberately vulnerable — that's the opening
   if(b.arch==='tourist') return b.state==='wind'||b.state==='attack';  // camera up = untouchable; open on the recover
+  if(b.arch==='lawyer')  return b.state==='wind'||b.state==='attack';   // guarded mid-serve/mid-slam; open on the recover
   return b.state==='wind'||b.state==='attack';
 };
 function bossRepel(b){                              // "get away from me" — huge knockback + instant sober
@@ -929,14 +931,14 @@ function genBoss(bn,forceArch){
   const sd=bn*97.31+3.7, H=k=>hsh(sd+k*1.7);
   const N=BOSS_ARCH.length;
   const arch=forceArch||BOSS_ARCH[(bn-1+Math.floor(H(1)*N))%N];   // rotate + roll so every archetype recurs
-  const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2,subway:1.1,halal:0.95,auteur:1.0,tourist:1.05}[arch];
+  const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2,subway:1.1,halal:0.95,auteur:1.0,tourist:1.05,lawyer:1.1}[arch];
   const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
     x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
     weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,
-    hp:0,maxhp:0, sc: arch==='crawler'?2.6:(arch==='deli'?3.0:(arch==='subway'||arch==='halal'?2.9:(arch==='auteur'||arch==='tourist'?2.9:3.1))),
+    hp:0,maxhp:0, sc: arch==='crawler'?2.6:(arch==='deli'?3.0:(arch==='subway'||arch==='halal'?2.9:(arch==='auteur'||arch==='tourist'||arch==='lawyer'?2.9:3.1))),
     segs: arch==='ratking'?4+Math.floor(H(3)*4):3,
     legs: arch==='crawler'?6+Math.floor(H(4)*5):(arch==='ratking'?4:2),
-    spd: arch==='crawler'?1.5:(arch==='bouncer'?0.7:(arch==='deli'?0.85:(arch==='halal'?0.8:(arch==='subway'?1.1:(arch==='auteur'?1.0:1.05))))),
+    spd: arch==='crawler'?1.5:(arch==='bouncer'?0.7:(arch==='deli'?0.85:(arch==='halal'?0.8:(arch==='subway'?1.1:(arch==='auteur'?1.0:(arch==='lawyer'?0.95:1.05)))))),
     dmg:10,
     phase:null, shots:0, reloadT:0,             // deli-only phase state (ignored by other archetypes)
     trainCd:260, trainX:0, duckCd:210,           // subway train timer / halal duck timer
@@ -944,7 +946,7 @@ function genBoss(bn,forceArch){
     photo:null, busX:0, busPark:0 };              // tourist photo frame + tour-bus position
   b.maxhp=b.hp=Math.round((220+bn*90)*mul*2.4);   // tanky — you have to earn it in the openings
   b.w= arch==='crawler'?46:(arch==='deli'?34:(arch==='halal'?40:32)); b.d=18;
-  b.h= arch==='bouncer'?98:(arch==='deli'?92:(arch==='subway'?86:(arch==='halal'?82:(arch==='auteur'?86:(arch==='tourist'?84:76)))));
+  b.h= arch==='bouncer'?98:(arch==='deli'?92:(arch==='subway'?86:(arch==='halal'?82:(arch==='auteur'?86:(arch==='tourist'?84:(arch==='lawyer'?88:76))))));
   return b;
 }
 
@@ -1044,6 +1046,7 @@ function updateBoss(b){
   if(b.arch==='halal'){ updateHalal(b,dx,dz,d); return; }
   if(b.arch==='auteur'){ updateAuteur(b,dx,dz,d); return; }
   if(b.arch==='tourist'){ updateTourist(b,dx,dz,d); return; }
+  if(b.arch==='lawyer'){ updateLawyer(b,dx,dz,d); return; }
   if(b.state==='stagger'){ b.st++; b.weakOpen=6; if(b.st>=90){ b.state='idle'; b.cd=16; } return; }
   if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=34){ b.state='idle'; b.cd=rnd(12,34); } return; }   // shorter recovery + cooldown = presses the attack more
   if(b.state==='wind'){ b.st++; if(b.st===1) blip(60,.06);
@@ -1267,6 +1270,47 @@ function updateTourist(b,dx,dz,d){
   if(b.cd<=0){ const close=d<58; b.move=close?'bonk':'photo';
     b.windLen= close?12:30; b.atkLen= close?24:14; b.state='wind'; b.st=0;
     if(!close) say(b.x,b.z-72,'SAY CHEESE!',b.pal.glow); }
+}
+
+// ---- THE LAWYER: a suit who works you from range with a fanned-out volley of subpoenas, then
+//      brings the gavel DOWN — a ground shockwave that rolls out both ways. jump the wave, close
+//      the gap on his recover. crowd him and you eat a briefcase backhand. ----
+function updateLawyer(b,dx,dz,d){
+  const ch=chinAt();
+  if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=32){ b.state='idle'; b.cd=rnd(16,32); } return; }  // planted after a move = the opening
+  if(b.state==='wind'){ b.st++; if(b.st===1) blip(70,.05);
+    if(b.st>=b.windLen){ b.state='attack'; b.st=0; b.hitDone=false;
+      if(b.move==='gavel') say(b.x,b.z-72,'ORDER!','#e0483a'); } return; }
+  if(b.state==='attack'){ b.st++;
+    if(b.move==='subpoena'){                               // serve a fanned volley of three spinning papers
+      if(b.st===6 && !b.hitDone){ const dir=b.face;
+        for(let i=-1;i<=1;i++)
+          fires.push({x:b.x+dir*18, z:b.z, y:26, vx:dir*rnd(4.2,4.8), vz:i*0.7, vy:0, r:7, life:110, max:110, foe:true, paper:true, spin:(i+1)*2, sober:S_LIGHT});
+        blip(140,.05); say(b.x,b.z-70,"YOU'VE BEEN SERVED",b.pal.glow); b.hitDone=true; } }
+    else if(b.move==='gavel'){                             // SLAM → a fixed stomp AND two rings that roll out along the ground
+      if(b.st===12 && !b.hitDone){ shake=12; rumble(300,1,.6,true); blip(360,.06);
+        if(P.y<26 && Math.abs(P.x-b.x)<86) hurtPlayer(ch+8,b.x,S_HEAVY);   // right at his feet on the slam
+        for(let i=0;i<18;i++) puff(b.x+rnd(-60,60),b.z,rnd(0,10),1,'#6b6478');
+        fires.push({x:b.x-34,z:b.z,y:0,vx:-3.2,vz:0,vy:0,r:10,life:44,max:44,foe:true,shock:true,sober:S_HEAVY});
+        fires.push({x:b.x+34,z:b.z,y:0,vx: 3.2,vz:0,vy:0,r:10,life:44,max:44,foe:true,shock:true,sober:S_HEAVY});
+        b.hitDone=true; } }
+    else if(b.move==='backhand'){                          // briefcase across the jaw if you crowd him
+      if(b.st>6 && b.st<16 && !b.hitDone && Math.abs(P.x-(b.x+b.face*40))<44 && Math.abs(P.z-b.z)<22){ hurtPlayer(ch+5,b.x,S_HEAVY); b.hitDone=true; } }
+    if(b.st>=b.atkLen){ b.state='recover'; b.st=0; }
+    b.x=clamp(b.x,camLock+30,camLock+W-30); return; }
+  // idle / approach — he keeps a courtroom distance and works the range
+  b.st++;
+  const want=100;
+  if(d>want+16) b.x+=b.face*b.spd; else if(d<want-16) b.x-=b.face*b.spd*0.7;
+  b.z+=clamp(dz,-1,1)*b.spd*0.35; b.z=clamp(b.z,FLOOR_N+8,FLOOR_S);
+  b.x=clamp(b.x,camLock+30,camLock+W-30);
+  b.cd-=(P.state==='talk'?2:1);
+  if(b.dmgTaken>b.maxhp*0.15){ b.dmgTaken=0; b.state='recover'; b.st=0; shake=6; say(b.x,b.z-70,'STAGGERED',b.pal.glow); return; }
+  if(b.cd<=0){ const close=d<64;
+    b.move= close?'backhand':(Math.random()<0.5?'gavel':'subpoena');
+    b.windLen= b.move==='gavel'?22:(b.move==='backhand'?12:16);
+    b.atkLen=  b.move==='gavel'?30:(b.move==='backhand'?24:22);
+    b.state='wind'; b.st=0; }
 }
 
 //====================== combat ======================
@@ -1843,7 +1887,7 @@ function update(){
     if(f.skewer){ f.vy-=0.07; }                          // skewers arc — rise then fall
     else if(f.tornado){ f.spin=(f.spin||0)+0.5;          // the twister stalks your row and creeps toward you
       f.vx = (P.x<f.x?-1:1)*Math.abs(f.vx); f.z += clamp(P.z-f.z,-0.5,0.5); }
-    else if(!f.bullet && !f.clap){ f.vx*=0.965; f.r+=0.30; }   // plain fire spreads; bullets/claps fly straight
+    else if(!f.bullet && !f.clap && !f.paper && !f.shock){ f.vx*=0.965; f.r+=0.30; }   // plain fire spreads; bullets/claps/papers fly straight
     f.life--;
     if(f.life<0){ f.gone=true; continue; }
     if(f.foe===false){                                 // your fireball — burns whoever it catches
@@ -1861,6 +1905,11 @@ function update(){
     if(f.tornado){                                       // catches you on the ground → tossed way up
       if(Math.abs(f.x-P.x)<f.r+8 && Math.abs(f.z-P.z)<f.r*0.5+10 && P.iframes<=0 && P.y<30){
         launchPlayer(chinAt()+4, f.x); f.gone=true; }     // one big toss, then it dissipates
+      continue;
+    }
+    if(f.shock){ f.r+=1.4;                               // the gavel wave rolls out along the pavement — JUMP it
+      if(Math.abs(f.x-P.x)<f.r*0.4+8 && Math.abs(f.z-P.z)<16 && P.iframes<=0 && P.y<24){
+        hurtPlayer(chinAt()+6, f.x, f.sober||0); f.gone=true; }
       continue;
     }
     if(Math.abs(f.x-P.x)<f.r*0.8+9 && Math.abs(f.z-P.z)<f.r*0.4+9 && P.y<26)
@@ -2443,6 +2492,33 @@ function drawBoss(b){
       ctx.fillText('📷', sx, gy-(b.h+4)*G+bob); ctx.globalAlpha=1; }
     glowBlob(0,17,3.0);                                  // chest (weak point)
   }
+  else if(b.arch==='lawyer'){
+    const gavel=(b.state==='wind'||b.state==='attack')&&b.move==='gavel';
+    const serve=b.state==='attack'&&b.move==='subpoena'&&b.st<10;
+    const swat =b.state==='attack'&&b.move==='backhand'&&b.st<16;
+    // gavel arm: cocked high on the wind, hammered down through the attack, resting otherwise
+    const raise= gavel ? (b.state==='wind'? 22+b.st*0.4 : Math.max(-6,22-b.st*2.4)) : 12;
+    R(-4,0,5,12,'#15161c'); R(4,0,5,12,'#15161c');       // pressed suit trousers
+    R(-4,0,6,3,'#0e0e12'); R(4,0,6,3,'#0e0e12');         // oxford shoes
+    R(0,10,15,16,body);                                  // suit jacket
+    R(0,10,4,15,'#e8e2d4');                              // white dress shirt
+    R(0,19,3,6,glow);                                    // power tie (weak-point red)
+    R(-7,15,4,10,body); R(7,15,4,10,body);               // lapels / jacket sides
+    R(0,23,9,8,'#caa07a');                               // face
+    R(-2.2,26.5,1.5,1.5,'#1a1620'); R(2.2,26.5,1.5,1.5,'#1a1620');  // eyes
+    R(0,31,10,3,'#1c1a20'); R(0,32.5,11,1.6,'#0e0e12');  // slicked-back hair
+    // briefcase in the off hand
+    R(-12,5,6,8,'#3a2a1a'); R(-12,9,6,1.4,'#caa14a');    // case body + brass latch
+    // gavel in the near hand
+    R(11,10+raise,2,10,'#6a4e2a');                       // handle
+    R(11,18+raise,8,5,'#8a6a3a'); R(11,18+raise,8,1.6,'#5a3f22');   // mallet head + band
+    if(serve) R(13,20,6,7,'#efe9d8');                    // a subpoena leaving his hand
+    if(swat){ R(13,16,7,8,'#3a2a1a'); R(13,16,7,1.4,'#caa14a'); }   // briefcase mid-backhand
+    if(gavel&&b.state==='wind'){ ctx.globalAlpha=.5+.5*Math.sin(t*.6); ctx.fillStyle=glow;   // slam telegraph
+      ctx.font='bold 10px "JetBrains Mono",monospace'; ctx.textAlign='center';
+      ctx.fillText('⚖', sx, gy-(b.h+6)*S*G+bob); ctx.globalAlpha=1; }
+    glowBlob(0,19,3.0);                                  // tie knot / chest (weak point)
+  }
   else {                                                 // crawler
     ctx.strokeStyle=dark; ctx.lineWidth=2.2*S*G;
     for(let i=0;i<b.legs;i++){ const side=i%2?1:-1, idx=Math.floor(i/2);
@@ -2510,8 +2586,22 @@ function drawFires(){
     for(let i=0;i<4;i++){ ctx.fillStyle=i%2?'#141418':'#e8e2d4'; ctx.fillRect(-8+i*4,-8,4,3); }  // diagonal clapper teeth
     ctx.fillStyle='#e23b3b'; ctx.fillRect(-6,0,3,3);           // red action dot
     ctx.restore(); }
+  // subpoenas (the lawyer) — a served sheet tumbling end over end
+  for(const f of fires){ if(!f.paper) continue; const bx=f.x-camX, by=f.z-f.y;
+    ctx.save(); ctx.translate(bx,by); ctx.rotate((f.spin||0)+t*0.35);
+    ctx.fillStyle='#efe9d8'; ctx.fillRect(-6,-8,12,16);       // the sheet
+    ctx.fillStyle='#b3aa98'; for(let i=0;i<4;i++) ctx.fillRect(-4,-6+i*3,8,1);   // lines of text
+    ctx.fillStyle='#e0483a'; ctx.fillRect(-4,4,5,3);          // red court stamp
+    ctx.restore(); }
+  // gavel shockwaves (the lawyer) — a low ring skimming the pavement
+  for(const f of fires){ if(!f.shock) continue; const bx=f.x-camX, by=f.z;
+    ctx.globalAlpha=clamp(f.life/44,0,1)*0.75; ctx.strokeStyle='#e8dcb0'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.ellipse(bx,by,f.r,f.r*0.4,0,0,7); ctx.stroke();
+    ctx.globalAlpha=clamp(f.life/44,0,1)*0.4; ctx.strokeStyle='#e0483a'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.ellipse(bx,by,f.r+3,(f.r+3)*0.4,0,0,7); ctx.stroke();
+    ctx.globalAlpha=1; }
   ctx.globalCompositeOperation='lighter';
-  for(const f of fires){ if(f.bullet||f.skewer||f.clap||f.tornado) continue; const a=clamp(f.life/22,0,1)*.85;
+  for(const f of fires){ if(f.bullet||f.skewer||f.clap||f.tornado||f.paper||f.shock) continue; const a=clamp(f.life/22,0,1)*.85;
     ctx.globalAlpha=a; ctx.drawImage(fireC, f.x-camX-f.r, f.z-f.y-f.r*.9, f.r*2, f.r*2); }
   ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1;
   // broom tornadoes (the auteur) — a swirling grey funnel of swept-up street trash
