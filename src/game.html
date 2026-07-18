@@ -697,11 +697,10 @@ function genChunk(ci){
   for(let i=0;i<3;i++){ const ty=['can','box','crate','dumpster'][Math.floor(R()*4)];
     cans.push({x:x0+40+R()*(CHUNK-80), z:FLOOR_N+8+R()*(FLOOR_S-FLOOR_N-16), type:ty,
       hp: ty==='box'?1:ty==='dumpster'?3:2, w: ty==='dumpster'?18:11, shake:0, dead:false, chunk:ci}); }
-  // street furniture against the storefronts — trees, hydrants, benches, mailboxes, signs, gates, lamps, etc.
-  for(let i=0;i<8;i++){ const ty=['tree','tree','tree2','hydrant','bench','mailbox','sign','gate','lamp','crate2'][Math.floor(R()*10)];
-    props.push({x:x0+30+R()*(CHUNK-60), z:FLOOR_N-2+R()*22, type:ty, ph:R()*9, chunk:ci});
-    if(t===0 && (ty==='lamp' || ty==='tree2' || ty==='crate2')) console.log("PROP created: type="+ty+" has sprite?", !!IDX[`prop.${ty}`]);
-  }
+  // street furniture against the storefronts — trees, hydrants, benches, mailboxes, signs, lamps, crates.
+  // (gate dropped — its sprite has baked-in graffiti we don't want)
+  for(let i=0;i<8;i++){ const ty=['tree','tree2','tree2','hydrant','bench','mailbox','sign','lamp','lamp','crate2'][Math.floor(R()*10)];
+    props.push({x:x0+30+R()*(CHUNK-60), z:FLOOR_N-2+R()*22, type:ty, ph:R()*9, chunk:ci}); }
   for(let i=0;i<8;i++) crowd.push({x:x0+R()*CHUNK, z:FLOOR_N-9+R()*7, ph:R()*9, blob:true, chunk:ci});
   if(ci>0) { const gx = x0+240+R()*280; GATES.push({x:gx, done:false, chunk:ci}); console.log("GATE created at x=" + gx + " chunk=" + ci); }
   CLUBS=BUILDINGS.filter(b=>b.kind==='club');
@@ -2431,9 +2430,10 @@ function shadow(x,z,r){ ctx.globalAlpha=.34; ctx.fillStyle='#000';
 function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0), z=c.z;
   shadow(c.x,c.z, c.type==='dumpster'?18:13);
 
-  // try sprite for dumpster
+  // try sprite for dumpster (scaled down — PixelLab prop fills the whole frame)
   if(c.type==='dumpster' && IDX['prop.dumpster']){
-    spr('prop.dumpster', sx, z, 1);
+    const p=IDX['prop.dumpster'], sc=0.50, DW=S*sc;
+    ctx.drawImage(sheet,p[0],p[1],S,S,Math.round(sx-DW/2),Math.round(z-DW+2),DW,DW);
     return;
   }
 
@@ -2462,17 +2462,24 @@ function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0), z=c.z;
 }
 
 // decorative street furniture — never breaks, just gives the block character
-let logged_props=new Set();
+// PixelLab props fill the whole 92px frame (unlike the hero, who occupies ~47px),
+// so each needs its own scale to sit at human proportions. Bottom of the scaled
+// frame is seated on the ground line (z) so nothing floats.
+const PROP_SC={hydrant:0.34,mailbox:0.40,sign:0.60,lamp:0.85,crate2:0.46,tree2:0.95,dumpster:0.50};
+function drawSpriteProp(key,sx,z,sc,shw){
+  const p=IDX[key]; if(!p) return false;
+  const DW=S*sc;
+  const dx=Math.round(sx-DW/2), dy=Math.round(z-DW+2);   // seat the frame bottom on the ground
+  if(shw) shadow(sx+camX,z,shw);
+  ctx.drawImage(sheet,p[0],p[1],S,S,dx,dy,DW,DW);
+  return true;
+}
 function drawProp(pr){ const sx=pr.x-camX, z=pr.z;
-  // try to draw as sprite first (hydrant, mailbox, sign, gate, etc.)
   const spriteKey = `prop.${pr.type}`;
   if(IDX[spriteKey]){
-    if(!logged_props.has(spriteKey)) { console.log("✓ SPRITE FOUND & DRAWING:", spriteKey); logged_props.add(spriteKey); }
-    shadow(pr.x,pr.z,8);
-    spr(spriteKey, sx, z, 1);  // face=1 (east), no tint
+    const sc=PROP_SC[pr.type]||0.5;
+    drawSpriteProp(spriteKey, sx, z, sc, pr.type==='tree2'?14:8);
     return;
-  } else {
-    if(!logged_props.has(spriteKey)) { console.log("✗ SPRITE MISSING:", spriteKey, " → fallback procedural"); logged_props.add(spriteKey); }
   }
 
   // fallback to procedural drawing
