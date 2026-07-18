@@ -950,7 +950,7 @@ function genBoss(bn,forceArch){
   const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2,subway:1.1,halal:0.95,auteur:1.0,tourist:1.05,lawyer:1.1}[arch];
   const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
     x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
-    weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,
+    weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,enraged:false,enrageT:0,
     hp:0,maxhp:0, sc: arch==='crawler'?2.6:(arch==='deli'?3.0:(arch==='subway'||arch==='halal'?2.9:(arch==='auteur'||arch==='tourist'||arch==='lawyer'?2.9:3.1))),
     segs: arch==='ratking'?4+Math.floor(H(3)*4):3,
     legs: arch==='crawler'?6+Math.floor(H(4)*5):(arch==='ratking'?4:2),
@@ -1053,6 +1053,18 @@ function updateBoss(b){
   if(b.arch==='tourist') b.busX += (b.busPark-b.busX)*0.12;   // the bus keeps rolling in during the intro
   const dx=P.x-b.x, dz=P.z-b.z, d=Math.abs(dx);
   if(b.state!=='intro') b.face=dx>0?1:-1;
+
+  // ENRAGE — at 25% HP the boss gets a SECOND WIND: heals back to 50% (once), swells, glows red, comes at you faster.
+  if(!b.enraged && b.arch!=='deli' && b.hp>0 && b.hp < b.maxhp*0.25 && b.state!=='intro' && b.state!=='dead'){   // deli's gun phase is his own second wind
+    b.enraged=true; b.hp=Math.round(b.maxhp*0.5); b.enrageT=1;   // b.enraged is one-way → the heal only ever happens once
+    shake=15; hitstop=9; rumble(640,1,1,true);
+    for(let i=0;i<20;i++) puff(b.x+rnd(-30,30), b.z, rnd(0,b.h), 1, '#ff2a2a');
+    say(b.x,b.z-96,'NOT DONE WITH YOU',b.pal.glow); say(b.x,b.z-80,'SECOND WIND','#ff2a2a'); blip(110,.16);
+  }
+  if(b.enraged && b.state!=='dead'){ b.enrageT=(b.enrageT||0)+1;
+    b.cd -= 0.8;                                 // presses attacks harder — comes at you faster
+    if(b.state==='recover') b.st += 0.7;         // …and shakes off the recovery quicker
+  }
 
   if(b.state==='intro'){ b.st++; b.rise=Math.max(0,1-b.st/40);
     if(b.st===1){ shake=10; } if(b.st>=46){ b.state='idle'; b.cd=36; } return; }
@@ -2545,10 +2557,13 @@ function drawBigRat(e){
 // procedural boss renderer — all fillRects/curves off (sx, ground, face, scale), same idiom as
 // drawBigRat. G grows the body up out of the street during the intro; weak point glows additive.
 function drawBoss(b){
-  const sx=b.x-camX, gy=b.z-b.y, f=b.face, S=b.sc;
+  const sx=b.x-camX, gy=b.z-b.y, f=b.face, S=b.sc*(b.enraged?1.16+0.02*Math.sin(t*0.35):1);   // enraged = swollen
   const G=b.state==='intro'?(1-b.rise):1;
   shadow(b.x,b.z,30*Math.max(.2,G));
   if(G<=0.02) return;
+  if(b.enraged){ ctx.save(); ctx.globalCompositeOperation='lighter';   // seething red aura hugging the silhouette
+    ctx.globalAlpha=0.22+0.13*Math.sin(t*0.4); ctx.fillStyle='#ff2a2a';
+    ctx.beginPath(); ctx.ellipse(sx, gy-b.h*0.45*S*G+Math.sin(b.anim*2)*2.4, b.w*0.95*S, b.h*0.55*S*G, 0,0,7); ctx.fill(); ctx.restore(); }
   const hit=b.hitstun>0||b.flash>3;
   const body=hit?'#ffffff':b.pal.body, dark=hit?'#e6e6ee':b.pal.dark, glow=b.pal.glow;
   const bob=Math.sin(b.anim*2)*2.4;
@@ -2766,12 +2781,13 @@ function drawBossBar(){
   const b=boss, fr=clamp(b.hp/b.maxhp,0,1);
   const bw=W-150, bx=(W-bw)/2, by=14;
   ctx.textAlign='center';
-  ctx.fillStyle=b.pal.glow; ctx.font='bold 8px "JetBrains Mono",monospace';
-  ctx.fillText(b.name, W/2, by-3);
+  ctx.fillStyle=b.enraged?'#ff2a2a':b.pal.glow; ctx.font='bold 8px "JetBrains Mono",monospace';
+  ctx.fillText(b.name + (b.enraged?'  ◆ ENRAGED ◆':''), W/2, by-3);
   ctx.fillStyle='rgba(6,4,10,.85)'; ctx.fillRect(bx-2,by,bw+4,7);
   ctx.fillStyle='#3a1220'; ctx.fillRect(bx,by+1,bw,5);
-  ctx.fillStyle= fr>.5?'#ff2e88':fr>.25?'#ff8c3a':'#ff5a2e';
+  ctx.fillStyle= b.enraged?'#ff2a2a':(fr>.5?'#ff2e88':fr>.25?'#ff8c3a':'#ff5a2e');
   ctx.fillRect(bx,by+1,bw*fr,5);
+  if(b.enraged){ ctx.globalAlpha=0.25+0.2*Math.sin(t*0.4); ctx.fillStyle='#fff'; ctx.fillRect(bx,by+1,bw*fr,5); ctx.globalAlpha=1; }
   if(b.flash>0){ ctx.fillStyle='#fff'; ctx.globalAlpha=b.flash/8; ctx.fillRect(bx,by+1,bw,5); ctx.globalAlpha=1; }
   ctx.fillStyle='rgba(11,10,16,.5)'; for(let i=1;i<20;i++) ctx.fillRect(bx+bw/20*i,by+1,1,5);
   ctx.strokeStyle=b.pal.glow; ctx.lineWidth=1; ctx.strokeRect(bx-2.5,by+0.5,bw+5,6);

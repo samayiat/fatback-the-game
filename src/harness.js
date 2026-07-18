@@ -346,6 +346,25 @@ if(!err){
     if(!(drunkDmg<soberDmg)) throw new Error('being drunk should reduce damage taken: '+drunkDmg+' vs '+soberDmg);
     console.log('        sober cap = 2; drunk softens the blow ('+Math.round(drunkDmg)+' vs '+Math.round(soberDmg)+' HP)');
   });
+  scene('boss enrage: drops below 25% → second wind (heals to 50% once), red, faster', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.state='idle'; g.P.iframes=999;
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'bouncer'); const b=g.boss;
+    for(let i=0;i<60;i++) __tick(1);                         // clear the intro
+    if(b.enraged) throw new Error('should not be enraged at full HP');
+    b.hp=Math.round(b.maxhp*0.20); __tick(1);               // drop under 25% → triggers enrage (+ a hitstop punch)
+    if(!b.enraged) throw new Error('under 25% should trigger enrage');
+    if(Math.abs(b.hp-b.maxhp*0.5)>2) throw new Error('second wind should heal back to ~50%, got '+Math.round(b.hp/b.maxhp*100)+'%');
+    for(let i=0;i<14;i++) __tick(1);                         // let the enrage hitstop drain
+    // the heal only happens ONCE — drop under 25% again, no re-heal
+    b.hp=Math.round(b.maxhp*0.10); for(let i=0;i<3;i++) __tick(1);
+    if(b.hp>b.maxhp*0.15) throw new Error('the second wind must not heal a second time, got '+Math.round(b.hp/b.maxhp*100)+'%');
+    // and it presses harder: cooldown drains faster while enraged
+    b.state='idle'; b.cd=40; const cd0=b.cd; __tick(1); const drained=cd0-b.cd;
+    if(!(drained>1)) throw new Error('enraged boss should burn its cooldown faster (got '+drained.toFixed(1)+'/frame)');
+    console.log('        enrage: healed to 50% once, stays down after, cd drains '+drained.toFixed(1)+'/frame');
+  });
   scene('lawyer boss: serves a subpoena fan, gavel sends a shockwave, open on recover', ()=>{
     const g=__G(); g.clearEnts();
     g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle';
