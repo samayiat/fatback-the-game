@@ -93,7 +93,7 @@ const driver = `
    rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
    tryGrab,grabbable,atCurb,splatInTraffic,dropGrab,launchGrabbed,tossPlayerToStreet,
    throwWeapon,drop, get WEAPONS(){return WEAPONS},
-   genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate,
+   genBoss,spawnBoss,updateBoss,killBoss,enrageBoss,hits,atkBox,startDate,resolveDate,
    buyContinue,callItNight,clutchRevive,continueCost,confFloor});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
 ;globalThis.__tick=(n)=>{ for(let i=0;i<n;i++){ update(); } };
@@ -337,33 +337,50 @@ if(!err){
     heavy();                                                  // #3 must NOT sober
     if(!(after1<100)) throw new Error('the first heavy hit should sober you');
     if(g.P.drunk!==100) throw new Error('a third heavy hit must not sober you (cap is 2), drunk='+g.P.drunk);
-    // light pokes still nibble even past the cap
+    // light pokes/projectiles do NOT sober you at all during a boss fight (only the 2 heavy hits do)
     g.P.drunk=100; g.P.iframes=0; g.P.state='idle'; g.hurtPlayer(6,b.x,10);
-    if(!(g.P.drunk<100)) throw new Error('light pokes should still trim a little drunk');
+    if(g.P.drunk!==100) throw new Error('light pokes must not sober you during a boss fight, drunk='+g.P.drunk);
     // alcohol dulls the pain: the same hit costs less HP when you're lit
     g.P.drunk=0;   g.P.iframes=0; g.P.state='idle'; g.P.hp=1000; g.hurtPlayer(100,b.x,0); const soberDmg=1000-g.P.hp;
     g.P.drunk=100; g.P.iframes=0; g.P.state='idle'; g.P.hp=1000; g.hurtPlayer(100,b.x,0); const drunkDmg=1000-g.P.hp;
     if(!(drunkDmg<soberDmg)) throw new Error('being drunk should reduce damage taken: '+drunkDmg+' vs '+soberDmg);
     console.log('        sober cap = 2; drunk softens the blow ('+Math.round(drunkDmg)+' vs '+Math.round(soberDmg)+' HP)');
   });
-  scene('boss enrage: drops below 25% → second wind (heals to 50% once), red, faster', ()=>{
-    const g=__G(); g.clearEnts();
-    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.state='idle'; g.P.iframes=999;
-    g.setCamLock(Math.max(0,g.P.x-170));
-    g.spawnBoss(2,'bouncer'); const b=g.boss;
-    for(let i=0;i<60;i++) __tick(1);                         // clear the intro
-    if(b.enraged) throw new Error('should not be enraged at full HP');
-    b.hp=Math.round(b.maxhp*0.20); __tick(1);               // drop under 25% → triggers enrage (+ a hitstop punch)
-    if(!b.enraged) throw new Error('under 25% should trigger enrage');
-    if(Math.abs(b.hp-b.maxhp*0.5)>2) throw new Error('second wind should heal back to ~50%, got '+Math.round(b.hp/b.maxhp*100)+'%');
-    for(let i=0;i<14;i++) __tick(1);                         // let the enrage hitstop drain
-    // the heal only happens ONCE — drop under 25% again, no re-heal
+  scene('boss enrage: ~20% roll a second wind under 25%; it heals to 50% once, then faster', ()=>{
+    const g=__G();
+    // RATE — over many bosses dropped under 25%, roughly 1 in 5 gets the second wind (not every time, not never)
+    let enr=0; const N=40;
+    for(let k=0;k<N;k++){ g.clearEnts(); g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.state='idle'; g.P.iframes=999;
+      g.setCamLock(Math.max(0,g.P.x-170)); g.spawnBoss(2,'bouncer'); const bb=g.boss;
+      for(let i=0;i<50;i++) __tick(1); bb.hp=Math.round(bb.maxhp*0.20); __tick(1); if(bb.enraged) enr++; }
+    if(enr===0) throw new Error('the second wind never fired over '+N+' bosses');
+    if(enr>N*0.55) throw new Error('the second wind fires too often ('+enr+'/'+N+') — should be ~20%, not near-always');
+    // EFFECTS — force one and check the heal-once + faster cooldown
+    g.clearEnts(); g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.state='idle'; g.P.iframes=999;
+    g.setCamLock(Math.max(0,g.P.x-170)); g.spawnBoss(2,'bouncer'); const b=g.boss;
+    for(let i=0;i<50;i++) __tick(1);
+    b.hp=Math.round(b.maxhp*0.20); g.enrageBoss(b);
+    if(!b.enraged || Math.abs(b.hp-b.maxhp*0.5)>2) throw new Error('the second wind should heal back to ~50%');
+    for(let i=0;i<14;i++) __tick(1);
     b.hp=Math.round(b.maxhp*0.10); for(let i=0;i<3;i++) __tick(1);
     if(b.hp>b.maxhp*0.15) throw new Error('the second wind must not heal a second time, got '+Math.round(b.hp/b.maxhp*100)+'%');
-    // and it presses harder: cooldown drains faster while enraged
     b.state='idle'; b.cd=40; const cd0=b.cd; __tick(1); const drained=cd0-b.cd;
     if(!(drained>1)) throw new Error('enraged boss should burn its cooldown faster (got '+drained.toFixed(1)+'/frame)');
-    console.log('        enrage: healed to 50% once, stays down after, cd drains '+drained.toFixed(1)+'/frame');
+    console.log('        second wind ~20% ('+enr+'/'+N+'); heals to 50% once, cd drains '+drained.toFixed(1)+'/frame');
+  });
+  scene('boss hurtbox reaches ≥25px past its side (easier to hit)', ()=>{
+    const g=__G(); g.clearEnts();
+    g.spawnBoss(2,'bouncer'); const b=g.boss;
+    // a punch box just past the boss's own half-width should still connect thanks to the fat hurtbox
+    const swing={x:b.x + (b.w+22), z:b.z, rw:2, rd:6};      // arc sits 22px beyond the boss body edge, only 2px wide
+    if(!g.hits(swing,b)) throw new Error('a swing 22px past the boss edge should land (hurtbox pads +25)');
+    const miss={x:b.x + (b.w+40), z:b.z, rw:2, rd:6};       // 40px past → beyond the +25 pad, should whiff
+    if(g.hits(miss,b)) throw new Error('40px past the edge should be out of the padded hurtbox');
+    // an ordinary street enemy gets NO pad
+    const e=g.vamp(1000,300,false,false);
+    const near={x:e.x + (e.w+22), z:e.z, rw:2, rd:6};
+    if(g.hits(near,e)) throw new Error('the pad is boss-only — a vamp should not get it');
+    console.log('        boss hurtbox pads +25px horizontally; street enemies unchanged');
   });
   scene('lawyer boss: serves a subpoena fan, gavel sends a shockwave, open on recover', ()=>{
     const g=__G(); g.clearEnts();

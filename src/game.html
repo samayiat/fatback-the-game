@@ -723,7 +723,7 @@ let bestScore=(()=>{ try{ return +(localStorage.getItem('fatback_best')||0)||0; 
 
 const P={};
 function reset(){
-  Object.assign(P,{x:120,z:300,y:0,vy:0,face:1,hp:100,maxhp:100,drunk:0,conf:0,money:20,
+  Object.assign(P,{x:120,z:300,y:0,vy:0,face:1,hp:100,maxhp:100,drunk:0,conf:0,money:500,
     state:'idle',st:0,step:0,buf:0,connected:false,hitDone:false,driftPh:0,iframes:0,
     dmgMul:1,dmgT:0,fireT:0,scammedBy:null,lean:0,stumble:0,stumbleV:0,hitFlash:0,airT:0,deaths:0,
     bottles:2,stepV:0,talkT:0,talkN:null,downT:0,knockV:0,builtT:0,weapon:null,grabE:null,grabbedBy:null,inStreet:false});
@@ -950,7 +950,7 @@ function genBoss(bn,forceArch){
   const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2,subway:1.1,halal:0.95,auteur:1.0,tourist:1.05,lawyer:1.1}[arch];
   const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
     x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
-    weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,enraged:false,enrageT:0,
+    weakOpen:0,dmgTaken:0,rise:1,cd:50,move:null,windLen:24,atkLen:28,hitDone:false,repelCd:0,enraged:false,enrageRoll:false,enrageT:0,
     hp:0,maxhp:0, sc: arch==='crawler'?2.6:(arch==='deli'?3.0:(arch==='subway'||arch==='halal'?2.9:(arch==='auteur'||arch==='tourist'||arch==='lawyer'?2.9:3.1))),
     segs: arch==='ratking'?4+Math.floor(H(3)*4):3,
     legs: arch==='crawler'?6+Math.floor(H(4)*5):(arch==='ratking'?4:2),
@@ -1048,18 +1048,23 @@ function bossAttack(b,dx,dz,d){
     if(Math.abs(P.x-b.x)<92 && P.y<32 && b.repelCd<=0) bossRepel(b); } }
 }
 
+function enrageBoss(b){                            // the second wind fires — heal to 50% (once), swell, red, faster
+  b.enraged=true; b.enrageRoll=true; b.hp=Math.round(b.maxhp*0.5); b.enrageT=1;
+  shake=15; hitstop=9; rumble(640,1,1,true);
+  for(let i=0;i<20;i++) puff(b.x+rnd(-30,30), b.z, rnd(0,b.h), 1, '#ff2a2a');
+  say(b.x,b.z-92,'NOT GOING LIKE THAT','#ff2a2a'); blip(110,.16);
+}
 function updateBoss(b){
   b.anim+=0.05; if(b.flash>0)b.flash--; if(b.weakOpen>0)b.weakOpen--; if(b.repelCd>0)b.repelCd--;
   if(b.arch==='tourist') b.busX += (b.busPark-b.busX)*0.12;   // the bus keeps rolling in during the intro
   const dx=P.x-b.x, dz=P.z-b.z, d=Math.abs(dx);
   if(b.state!=='intro') b.face=dx>0?1:-1;
 
-  // ENRAGE — at 25% HP the boss gets a SECOND WIND: heals back to 50% (once), swells, glows red, comes at you faster.
-  if(!b.enraged && b.arch!=='deli' && b.hp>0 && b.hp < b.maxhp*0.25 && b.state!=='intro' && b.state!=='dead'){   // deli's gun phase is his own second wind
-    b.enraged=true; b.hp=Math.round(b.maxhp*0.5); b.enrageT=1;   // b.enraged is one-way → the heal only ever happens once
-    shake=15; hitstop=9; rumble(640,1,1,true);
-    for(let i=0;i<20;i++) puff(b.x+rnd(-30,30), b.z, rnd(0,b.h), 1, '#ff2a2a');
-    say(b.x,b.z-92,'NOT GOING LIKE THAT','#ff2a2a'); blip(110,.16);
+  // ENRAGE — the FIRST time a boss drops below 25% HP it gets ONE 20% chance at a SECOND WIND:
+  // heal back to 50%, swell, glow red, come at you faster. 80% of the time it just keeps dying.
+  if(!b.enraged && !b.enrageRoll && b.arch!=='deli' && b.hp>0 && b.hp < b.maxhp*0.25 && b.state!=='intro' && b.state!=='dead'){
+    b.enrageRoll=true;                            // roll only once per fight, win or lose
+    if(Math.random()<0.20) enrageBoss(b);
   }
   if(b.enraged && b.state!=='dead'){ b.enrageT=(b.enrageT||0)+1;
     b.cd -= 0.8;                                 // presses attacks harder — comes at you faster
@@ -1370,7 +1375,8 @@ function updateLawyer(b,dx,dz,d){
 function atkBox(){ const wr = P.weapon?WEAPONS[P.weapon.type].reach:0;   // a weapon lengthens your reach
   const reach = (P.step===3?34:30)+U.reach*6+wr;
   return {x:P.x+P.face*reach/2, z:P.z, rw:reach/2, rd:18+U.reach*3+wr*0.4}; }   // right in front of you
-function hits(b,e){ return Math.abs(b.x-e.x)<b.rw+e.w && Math.abs(b.z-e.z)<b.rd+e.d; }
+function hits(b,e){ const px=e.k==='boss'?25:0, pz=e.k==='boss'?6:0;   // bosses carry a fat hurtbox — reaches ≥25px past their sides so you connect
+  return Math.abs(b.x-e.x)<b.rw+e.w+px && Math.abs(b.z-e.z)<b.rd+e.d+pz; }
 
 function connect(e,s){
   const crit=Math.random()<critChance();
@@ -1656,10 +1662,10 @@ function hurtPlayer(dmg,fromX,sober){
   if(P.iframes>0||OPT.inv||P.state==='caged'||P.state==='grabbed') return;   // caged/grabbed handle their own damage
   if(P.state==='grab' && P.grabE){ dropGrab(24); say(P.x,P.z-30,'BROKEN!','#ff2e88'); }   // hit mid-windup → the grab breaks, you eat it
   if(sober){                                     // a real hit rattles you toward sober
-    if(sober>=30 && boss){                       // a HEAVY, buzz-cratering hit during a boss fight — capped at 2/fight
-      if(bossSobers<2){ P.drunk=Math.max(0,P.drunk-sober); if(++bossSobers===2) say(P.x,P.z-52,"THAT'S THE LAST ONE",'#3ad1ff'); }
-      // spent your two sobers → the drink holds; he can't grind you dry
-    } else P.drunk=Math.max(0,P.drunk-sober);    // light pokes (and non-boss hits) always nibble a little
+    if(boss){                                    // in a boss fight ONLY the two heavy signature hits sober you —
+      if(sober>=30 && bossSobers<2){             // light pokes/projectiles never crack your buzz, so he can't grind you dry
+        P.drunk=Math.max(0,P.drunk-sober); if(++bossSobers===2) say(P.x,P.z-52,"THAT'S THE LAST ONE",'#3ad1ff'); }
+    } else P.drunk=Math.max(0,P.drunk-sober);    // out on the street, hits nibble as normal
   }
   // caught mid-sentence. she watched you get hit and you have nothing to say about it.
   const wasTalking = P.state==='talk';
