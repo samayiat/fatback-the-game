@@ -71,6 +71,11 @@ global.Image=class{ constructor(){ this.width=920; this.height=736; }
 global.window=global;
 global.self=global; global.top=global;
 
+// deterministic RNG so the shared-state scene suite can't flake run-to-run (mulberry32, fixed seed)
+let __rng=0x1a2b3c4d;
+Math.random=()=>{ __rng|=0; __rng=(__rng+0x6D2B79F5)|0; let x=Math.imul(__rng^(__rng>>>15),1|__rng);
+  x=(x+Math.imul(x^(x>>>7),61|x))^x; return ((x^(x>>>14))>>>0)/4294967296; };
+
 global.setTimeout=(f)=>{ try{f();}catch(e){} return 0; };  // waves spawn inline so we can test them
 const driver = `
 ;globalThis.__G=()=>({
@@ -120,6 +125,10 @@ if(MISSING.length) console.log('ids requested but NOT in markup: '+[...new Set(M
 
 // ---------------- scenarios ----------------
 function scene(name, fn){
+  // clear any grab/street residue a prior scene's sim may have left on the player, so scenes stay independent
+  try{ const g=globalThis.__G();
+    if(['grab','grabbed','caged'].includes(g.P.state)) g.P.state='idle';
+    g.P.grabE=null; g.P.grabbedBy=null; g.P.cageB=null; g.P.inStreet=false; }catch(e){}
   try{ fn(); console.log('  ok    '+name); }
   catch(e){ console.log('  FAIL  '+name+'\n        '+e.constructor.name+': '+e.message+
     '\n        '+(e.stack||'').split('\n')[1].trim()); err=err||e; }

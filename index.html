@@ -1441,7 +1441,7 @@ function tossPlayerToStreet(fromX){
   P.state='down'; P.inStreet=true; P.downT=70; P.iframes=100;
   P.hp-=Math.round((chinAt()+14)*(1-U.hide*0.12));
   P.vy=4.0; P.y=Math.max(P.y,4); P.knockV=(P.x<fromX?-1:1)*2.2; P.z=Math.min(ROAD_TARGET,P.z+22);
-  P.drunk=Math.max(0,P.drunk-S_HEAVY); P.grabbedBy=null; P.struggle=0;
+  P.drunk=Math.max(0,P.drunk-S_HEAVY); P.grabbedBy=null; P.struggle=0; P.grabImmune=150;
   shake=12; hitstop=8; rumble(460,1,.8,true); say(P.x,P.z-40,'TOSSED','#ff2e88');
 }
 function splatInTraffic(e,c){                               // a car finds a body in the road
@@ -1823,7 +1823,7 @@ function update(){
     if(jPunch){ P.struggle=(P.struggle||0)+1; blip(260,.02);
       if(P.struggle>=EGRAB_ESCAPE){ const g=P.grabbedBy;                    // shook loose
         if(g){ g.state='stun'; g.hitstun=30; g.cd=rnd(40,80); }
-        P.grabbedBy=null; P.struggle=0; P.state='idle'; P.iframes=26; say(P.x,P.z-30,'SHOOK LOOSE','#c9d13a'); } }
+        P.grabbedBy=null; P.struggle=0; P.state='idle'; P.iframes=26; P.grabImmune=90; say(P.x,P.z-30,'SHOOK LOOSE','#c9d13a'); } }
     if(!P.grabbedBy || P.grabbedBy.dead){ P.grabbedBy=null; P.struggle=0; P.state='idle'; P.iframes=20; }
   }
   else {
@@ -1879,6 +1879,7 @@ function update(){
   // REP (confFloor) sets the level it can never drop below.
   P.conf=Math.max(confFloor(), P.conf-0.02);
   if(P.iframes>0)P.iframes--;
+  if(P.grabImmune>0)P.grabImmune--;              // brief window where you can't be re-grabbed (no chain-grab lock)
   if(P.hitFlash>0)P.hitFlash--;
   for(const e of ents) if(e.flash>0) e.flash--;
   if(P.dmgT>0){ P.dmgT--; if(!P.dmgT)P.dmgMul=1; }
@@ -1980,8 +1981,8 @@ function update(){
       if(!e.tok){e.tok=true;toks++;} e.state='breathe'; e.st=0;
     }
     // at the curb they'll GRAB you and try to throw you into the road — mash out or you're the one splatted
-    else if(e.k==='vamp' && !e.fire && P.z>FLOOR_S-40 && d<40 && e.cd<=0 && (e.tok||toks<2)
-            && P.iframes<=0 && !OPT.inv && (P.state==='idle'||P.state==='walk'||P.state==='punch') && Math.random()<0.5){
+    else if(e.k==='vamp' && !e.fire && P.z>FLOOR_S-30 && d<38 && e.cd<=0 && (e.tok||toks<2)
+            && P.iframes<=0 && (P.grabImmune||0)<=0 && !OPT.inv && (P.state==='idle'||P.state==='walk') && Math.random()<0.4){
       if(!e.tok){e.tok=true;toks++;}
       e.state='grabbing'; e.grabT=0; e.face=dx>0?1:-1;
       P.state='grabbed'; P.grabbedBy=e; P.struggle=0; P.step=0; P.buf=0; P.talkN=null;
