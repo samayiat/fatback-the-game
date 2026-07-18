@@ -901,7 +901,7 @@ const BOSS_PAL={
 };
 // 'repel' is NOT in the random rotation — it only fires as the mash-punish (see connect()), so no
 // regular move ever tanks your drunk straight to zero. Regular hits sober you a little; heavy hits a lot.
-const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep'],deli:['boot'],subway:['kick'],halal:['skewer'],auteur:['clap','tornado'],tourist:['photo'],lawyer:['subpoena','gavel']};
+const BOSS_MOVES={ratking:['fire','sweep','charge'],bouncer:['stomp','hook','charge'],crawler:['charge','stab','sweep'],deli:['boot'],subway:['kick'],halal:['skewer'],auteur:['clap','tornado'],tourist:['photo'],lawyer:['subpoena','gavel','lockup']};
 const bossInv=b=>{                                 // i-frames: can't be traded through
   if(b.state==='intro') return true;
   if(b.arch==='deli'){
@@ -1202,6 +1202,14 @@ function launchPlayer(dmg,fromX){                          // scooped off your f
   P.vy=5.6; P.y=Math.max(P.y,4); P.downT=Math.max(P.downT,52);   // …then flung way up
   say(P.x,P.z-30,'WHEEEE','#e23b3b'); shake=Math.max(shake,7);
 }
+// the lawyer's briefcase pops open and dumps you back onto the pavement
+function releaseCage(b,escaped){
+  P.cageB=null; P.struggle=0;
+  P.state='down'; P.downT=escaped?28:52; P.iframes=escaped?44:64;
+  P.vy=escaped?3.2:1.8; P.y=Math.max(P.y,2); P.knockV=(P.x<b.x?-1:1)*(escaped?5:4); P.x+=P.knockV;
+  shake=Math.max(shake,8); rumble(300,.9,.6,true);
+  say(P.x,P.z-30, escaped?'BROKE OUT':'CASE DISMISSED', escaped?'#c9d13a':'#ff2e88');
+}
 function updateAuteur(b,dx,dz,d){
   const ch=chinAt(); const fast=b.buffT>0?0.6:1;          // "PERFECT." buff speeds his recovery/cooldown
   if(b.tidyCd>0) b.tidyCd--; if(b.buffT>0) b.buffT--;
@@ -1280,7 +1288,8 @@ function updateLawyer(b,dx,dz,d){
   if(b.state==='recover'){ b.st++; b.weakOpen=6; if(b.st>=32){ b.state='idle'; b.cd=rnd(16,32); } return; }  // planted after a move = the opening
   if(b.state==='wind'){ b.st++; if(b.st===1) blip(70,.05);
     if(b.st>=b.windLen){ b.state='attack'; b.st=0; b.hitDone=false;
-      if(b.move==='gavel') say(b.x,b.z-72,'ORDER!','#e0483a'); } return; }
+      if(b.move==='gavel') say(b.x,b.z-72,'ORDER!','#e0483a');
+      if(b.move==='lockup') say(b.x,b.z-72,'COUNSEL APPROACHES','#e0483a'); } return; }
   if(b.state==='attack'){ b.st++;
     if(b.move==='subpoena'){                               // serve a fanned volley of three spinning papers
       if(b.st===6 && !b.hitDone){ const dir=b.face;
@@ -1296,7 +1305,23 @@ function updateLawyer(b,dx,dz,d){
         b.hitDone=true; } }
     else if(b.move==='backhand'){                          // briefcase across the jaw if you crowd him
       if(b.st>6 && b.st<16 && !b.hitDone && Math.abs(P.x-(b.x+b.face*40))<44 && Math.abs(P.z-b.z)<22){ hurtPlayer(ch+5,b.x,S_HEAVY); b.hitDone=true; } }
-    if(b.st>=b.atkLen){ b.state='recover'; b.st=0; }
+    else if(b.move==='lockup'){                            // snap the briefcase shut ON you, then bang it on the pavement
+      if(b.st===4 && !b.hitDone){ b.hitDone=true;
+        if(P.state!=='caged' && P.iframes<=0 && !OPT.inv && P.y<28 && Math.abs(P.x-(b.x+b.face*40))<54 && Math.abs(P.z-b.z)<26){
+          P.state='caged'; P.cageB=b; P.struggle=0; b.caged=true; b.slams=0;
+          say(b.x,b.z-72,'IN CONTEMPT',b.pal.glow); blip(160,.06); }
+        else { b.caged=false; say(b.x,b.z-70,'OVERRULED','#5c5670'); blip(120,.04); b.state='recover'; b.st=0; return; } }   // grab whiffed → wide open
+      if(b.caged && P.state==='caged'){
+        P.x=b.x+b.face*24; P.z=b.z+8; P.y=0;               // held out front & low, stuffed in the case (in front of him)
+        if(b.st>=18 && b.slams<3 && (b.st-18)%16===0){     // three bangs on a cadence
+          b.slams++; shake=12; rumble(320,1,.6,true); blip(300,.06);
+          for(let i=0;i<12;i++) puff(P.x+rnd(-18,18),P.z,rnd(0,8),1,'#6b6478');
+          const dmg=Math.max(3,(ch+5)-(P.struggle||0)*0.5);   // struggling softens each bang
+          P.hp-=dmg*(1-U.hide*0.12); P.hitFlash=12; P.drunk=Math.max(0,P.drunk-S_HEAVY);
+          say(P.x,P.z-40,'SLAM!','#ff2e88'); }
+        const escaped=(P.struggle||0)>=8;                  // mashed the latches open
+        if(escaped || (b.slams>=3 && b.st>=58)){ releaseCage(b,escaped); b.caged=false; b.state='recover'; b.st=0; return; } } }
+    if(b.st>=b.atkLen){ if(P.state==='caged') releaseCage(b,false); b.caged=false; b.state='recover'; b.st=0; }
     b.x=clamp(b.x,camLock+30,camLock+W-30); return; }
   // idle / approach — he keeps a courtroom distance and works the range
   b.st++;
@@ -1307,9 +1332,9 @@ function updateLawyer(b,dx,dz,d){
   b.cd-=(P.state==='talk'?2:1);
   if(b.dmgTaken>b.maxhp*0.15){ b.dmgTaken=0; b.state='recover'; b.st=0; shake=6; say(b.x,b.z-70,'STAGGERED',b.pal.glow); return; }
   if(b.cd<=0){ const close=d<64;
-    b.move= close?'backhand':(Math.random()<0.5?'gavel':'subpoena');
-    b.windLen= b.move==='gavel'?22:(b.move==='backhand'?12:16);
-    b.atkLen=  b.move==='gavel'?30:(b.move==='backhand'?24:22);
+    b.move= close?(Math.random()<0.5?'lockup':'backhand'):(Math.random()<0.5?'gavel':'subpoena');
+    b.windLen= b.move==='gavel'?22:(b.move==='lockup'?18:(b.move==='backhand'?12:16));
+    b.atkLen=  b.move==='gavel'?30:(b.move==='lockup'?74:(b.move==='backhand'?24:22));
     b.state='wind'; b.st=0; }
 }
 
@@ -1534,7 +1559,7 @@ function dateRender(){                                    // crisp overlay on th
 }
 
 function hurtPlayer(dmg,fromX,sober){
-  if(P.iframes>0||OPT.inv) return;
+  if(P.iframes>0||OPT.inv||P.state==='caged') return;   // caged = the briefcase slams are the only thing that can touch you
   if(sober) P.drunk=Math.max(0,P.drunk-sober);   // a real hit rattles you toward sober
   // caught mid-sentence. she watched you get hit and you have nothing to say about it.
   const wasTalking = P.state==='talk';
@@ -1701,10 +1726,15 @@ function update(){
   }
   else if(P.state==='air'){                    // dive attack — the reason to press JUMP
     P.st++;
-    P.x += P.face*2.3; 
+    P.x += P.face*2.3;
     if(!P.hitDone && P.y>6){ const b={x:P.x+P.face*20,z:P.z,rw:30,rd:22};   // wider crash on the way down
       for(const e of ents){ if(e.dead)continue;
         if(hits(b,e)){ connect(e,{name:'dive',dmg:12,push:6.5,stun:34,y:2.2,launch:true,rum:[240,.9,.5]}); P.hitDone=true; } } }
+  }
+  else if(P.state==='caged'){                   // locked in the lawyer's briefcase — MASH PUNCH to break out
+    P.y=0; P.vy=0;
+    if(jPunch){ P.struggle=(P.struggle||0)+1; blip(240,.02); }
+    if(!P.cageB || P.cageB.dead){ P.state='idle'; P.cageB=null; P.iframes=Math.max(P.iframes,24); }   // he's down → you spill out
   }
   else {
     P.driftPh+=0.016;
@@ -1953,6 +1983,7 @@ function update(){
 function respawn(){
   P.hp=P.maxhp; P.drunk=0; P.x=Math.max(20,camX+40); P.z=300; P.y=0; P.vy=0; P.state='idle';
   P.step=0; P.buf=0; P.talkN=null; P.downT=0; P.iframes=110;
+  P.cageB=null; P.struggle=0; if(boss) boss.caged=false;   // spring the briefcase if you died inside it
   fires=[];
   for(const e of ents){ if(e.dead) continue;
     e.tok=false; e.hitstun=0; e.hitDone=true;
@@ -2496,6 +2527,7 @@ function drawBoss(b){
     const gavel=(b.state==='wind'||b.state==='attack')&&b.move==='gavel';
     const serve=b.state==='attack'&&b.move==='subpoena'&&b.st<10;
     const swat =b.state==='attack'&&b.move==='backhand'&&b.st<16;
+    const lock =(b.state==='wind'||b.state==='attack')&&b.move==='lockup';   // reaching to grab / holding the case
     // gavel arm: cocked high on the wind, hammered down through the attack, resting otherwise
     const raise= gavel ? (b.state==='wind'? 22+b.st*0.4 : Math.max(-6,22-b.st*2.4)) : 12;
     R(-4,0,5,12,'#15161c'); R(4,0,5,12,'#15161c');       // pressed suit trousers
@@ -2507,17 +2539,25 @@ function drawBoss(b){
     E(0,33,8.5,7,'#161318'); E(-6.5,30,3.8,4.5,'#161318'); E(6.5,30,3.8,4.5,'#161318');  // rounded afro (behind the head)
     E(0,34,6.5,5,'#241d29');                             // afro sheen
     R(0,23,9,8,'#5a3b25');                               // deep-brown face
-    R(0,23,9,2.4,'#3e2818');                             // trimmed beard along the jaw
     R(-2.2,26.5,1.5,1.5,'#120d0a'); R(2.2,26.5,1.5,1.5,'#120d0a');  // eyes
-    // briefcase in the off hand
-    R(-12,5,6,8,'#3a2a1a'); R(-12,9,6,1.4,'#caa14a');    // case body + brass latch
-    // gavel in the near hand
-    R(11,10+raise,2,10,'#6a4e2a');                       // handle
-    R(11,18+raise,8,5,'#8a6a3a'); R(11,18+raise,8,1.6,'#5a3f22');   // mallet head + band
+    // briefcase in the off hand — put away while he's working the grab (it's out front holding you)
+    if(!lock){ R(-12,5,6,8,'#3a2a1a'); R(-12,9,6,1.4,'#caa14a'); }   // case body + brass latch
+    if(lock){                                            // both arms thrust forward for the lockup
+      R(10,16,6,4,body); R(10,12,6,4,body);              // reaching arms
+      if(b.state==='wind'){ R(15,13,9,10,'#3a2a1a'); R(15,13,9,2,'#2a1e12'); R(15,12,9,2,'#caa14a'); }  // open case, telegraph
+    }
+    // gavel in the near hand (tucked away during the grab)
+    if(!lock){
+      R(11,10+raise,2,10,'#6a4e2a');                     // handle
+      R(11,18+raise,8,5,'#8a6a3a'); R(11,18+raise,8,1.6,'#5a3f22');   // mallet head + band
+    }
     if(serve) R(13,20,6,7,'#efe9d8');                    // a subpoena leaving his hand
     if(swat){ R(13,16,7,8,'#3a2a1a'); R(13,16,7,1.4,'#caa14a'); }   // briefcase mid-backhand
     if(gavel&&b.state==='wind'){ ctx.globalAlpha=.5+.5*Math.sin(t*.6); ctx.fillStyle=glow;   // slam telegraph
       ctx.font='bold 10px "JetBrains Mono",monospace'; ctx.textAlign='center';
+      ctx.fillText('⚖', sx, gy-(b.h+6)*S*G+bob); ctx.globalAlpha=1; }
+    if(lock&&b.state==='wind'){ ctx.globalAlpha=.5+.5*Math.sin(t*.7); ctx.fillStyle=glow;   // grab telegraph
+      ctx.font='bold 11px "JetBrains Mono",monospace'; ctx.textAlign='center';
       ctx.fillText('⚖', sx, gy-(b.h+6)*S*G+bob); ctx.globalAlpha=1; }
     glowBlob(0,19,3.0);                                  // tie knot / chest (weak point)
   }
@@ -2775,6 +2815,23 @@ function drawNPC(n){ const sx=n.x-camX; shadow(n.x,n.z,14);
     ctx.fillText(OPT.touch?'TALK':'[E]',sx,n.z-86); } }
 
 function drawPlayer(){
+  if(P.state==='caged'){                          // stuffed in the lawyer's briefcase, banged on the pavement
+    const sx=P.x-camX, gy=P.z, b=P.cageB, jolt=(b&&b.slams&&(b.st-18)%16<4)?rnd(-2,2):Math.sin(t*0.7)*1.2;
+    shadow(P.x,P.z,15);
+    ctx.fillStyle='#120d0a';                       // legs kicking out the bottom
+    ctx.fillRect(sx-4,gy-5,2.4,5); ctx.fillRect(sx+2,gy-5,2.4,5);
+    ctx.fillStyle='#5a3b25';                        // hands clawing out the top corners
+    ctx.fillRect(sx-10,gy-17+jolt,3,2); ctx.fillRect(sx+7,gy-17-jolt,3,2);
+    ctx.fillStyle='#3a2a1a'; ctx.fillRect(sx-9,gy-16,18,12);        // the closed case
+    ctx.fillStyle='#2a1e12'; ctx.fillRect(sx-9,gy-11,18,2);         // clamshell seam
+    ctx.fillStyle='#caa14a'; ctx.fillRect(sx-3,gy-18,6,2); ctx.fillRect(sx-6,gy-11.5,2,1.6); ctx.fillRect(sx+4,gy-11.5,2,1.6);  // handle + latches
+    // MASH meter
+    const got=clamp((P.struggle||0)/8,0,1);
+    ctx.fillStyle='#2a2436'; ctx.fillRect(sx-13,gy-27,26,3.5);
+    ctx.fillStyle='#c9d13a'; ctx.fillRect(sx-13,gy-27,26*got,3.5);
+    if(t%16<10){ ctx.fillStyle='#fff'; ctx.font='bold 8px "JetBrains Mono",monospace'; ctx.textAlign='center'; ctx.fillText('MASH!',sx,gy-31); }
+    return;
+  }
   shadow(P.x,P.z,16-P.y*0.06);
   let key='hero.rot.east';
   if(P.state==='walk') key='hero.walk.'+(Math.floor(t*.16)%6);
