@@ -55,8 +55,9 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch
   border:1px solid #2f2b3d;background:rgba(15,13,22,.6);display:flex;align-items:center;justify-content:center;
   color:var(--dim);font-size:11px;pointer-events:auto;letter-spacing:.1em}
 #devHotspot{position:absolute;right:0;bottom:0;width:80px;height:80px;opacity:0;cursor:pointer}
-#devToggle{position:fixed;bottom:20px;right:20px;background:rgba(60,14,34,.9);border:1px solid var(--club);color:var(--sodium);padding:12px 16px;border-radius:4px;font-size:12px;display:none;z-index:100;cursor:pointer;font-family:'JetBrains Mono',monospace}
-#devToggle:hover{background:rgba(255,46,136,.3)}
+#devToggle{position:fixed;bottom:12px;right:12px;background:rgba(60,14,34,.9);border:1px solid var(--club);color:var(--sodium);padding:8px 12px;border-radius:4px;font-size:11px;display:none;z-index:100;cursor:pointer;font-family:'JetBrains Mono',monospace}
+#devToggle:hover,#devToggle:active{background:rgba(255,46,136,.5)}
+#devTrigger{position:fixed;bottom:8px;right:8px;width:40px;height:40px;background:rgba(255,46,136,.15);border:1px solid rgba(255,46,136,.3);border-radius:4px;z-index:99;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--dim)}
 
 
 /* ---- pause ---- */
@@ -252,7 +253,8 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
       </div>
     </div>
     <div id="devHotspot"></div>
-    <button id="devToggle">CO-OP TEST</button>
+    <div id="devTrigger">D</div>
+    <button id="devToggle">CO-OP</button>
   </div>
 </div>
 <script>
@@ -512,6 +514,7 @@ $('recapAgain').onclick=anotherRound;
 $('resume').onclick=()=>setPause(false);
 $('pauseBtn').onclick=()=>setPause(!paused);
 $('devHotspot').onclick=()=>{ if(mode==='title') startSolo(); };
+$('devTrigger').onclick=()=>{ const dt=$('devToggle'); dt.style.display=dt.style.display==='none'?'block':'none'; };
 $('devToggle').onclick=()=>{ if(mode==='title') startCoop(); };
 $('d_sober').onclick=()=>P.drunk=0;
 $('d_drunk').onclick=()=>P.drunk=Math.min(100,P.drunk+40);
