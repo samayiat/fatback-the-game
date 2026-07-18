@@ -80,10 +80,14 @@ const driver = `
    get UPG(){return UPG}, get COMBO(){return COMBO}, get camX(){return camX},
    get boss(){return boss}, get camLock(){return camLock},
    get date(){return date}, get dateOn(){return dateOn},
+   get lives(){return lives}, get night(){return night}, get dawnShown(){return dawnShown},
+   get continueOn(){return continueOn}, get builtOn(){return builtOn}, get DAWN_X(){return DAWN_X},
    spawn:(e)=>ents.push(e), clearEnts:()=>{ ents.length=0; },
-   setCamLock:(v)=>{ camLock=v; camX=v; },
+   setCamLock:(v)=>{ camLock=v; camX=v; }, setBest:(v)=>{ best=v; }, setLives:(v)=>{ lives=v; },
+   releaseArena:()=>{ ents.length=0; camLock=null; boss=null; bossDone=0; hitstop=0; dateOn=false; date=null; fires.length=0; },
    rat,vamp,connect,hurtPlayer,setShop,buy,spawnWave,tier,stream,update,render,talkLen,resolveTalk,aggro,
-   genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate});
+   genBoss,spawnBoss,updateBoss,killBoss,startDate,resolveDate,
+   buyContinue,callItNight,clutchRevive,continueCost,confFloor});
 ;globalThis.__key=(k,v)=>{ if(v&&!key[k]) pressed[k]=true; key[k]=v; };
 ;globalThis.__tick=(n)=>{ for(let i=0;i<n;i++){ update(); } };
 ;globalThis.__draw=()=>render();
@@ -268,6 +272,29 @@ if(!err){
     g.connect(b,{dmg:30,stun:10});
     if(!(b.hp<hp0)) throw new Error('the tidy window must be vulnerable');
     console.log('        clap + tornado + tidy-window-open ok');
+  });
+  scene('the night: 3 lives → continue curve → clutch revive → dawn recap', ()=>{
+    const g=__G(); g.releaseArena();
+    g.P.hp=g.P.maxhp=100; g.P.conf=0; g.P.money=1000; g.P.x=200; g.P.z=300; g.setLives(3); g.U.rep=0;
+    const die=()=>{ g.P.hp=0; __tick(1); };
+    die(); die(); if(g.lives!==1) throw new Error('two deaths should leave 1 life, got '+g.lives);
+    die(); if(!g.continueOn) throw new Error('continue prompt did not open at 0 lives');
+    if(g.continueCost()!==50) throw new Error('first continue should be $50');
+    g.buyContinue(); die(); if(g.continueCost()!==100) throw new Error('second continue should be $100');
+    g.buyContinue(); die(); if(g.continueCost()!==250) throw new Error('third should be $250');
+    g.buyContinue(); die(); if(g.continueCost()!==500) throw new Error('fourth+ should be $500');
+    // clutch revive: die at full confidence with no money
+    g.buyContinue(); g.P.money=0; g.P.conf=100; g.P.hp=0; __tick(1);
+    if(!g.builtOn) throw new Error('built-different did not fire at full confidence');
+    if(g.continueOn) throw new Error('should skip the money gate at full confidence');
+    g.clutchRevive();
+    if(!(g.lives===1 && g.P.dmgMul===2.5 && g.P.builtT>3000)) throw new Error('clutch should grant a free life + 2.5x');
+    if(g.P.conf!==g.confFloor()) throw new Error('clutch should spend your confidence');
+    // dawn ends the night on the recap (fresh arena + low x so no boss re-triggers)
+    g.releaseArena(); g.P.x=200; g.P.z=300;
+    g.night.bosses=2; g.night.women=3; g.night.cash=200; g.night.reach=g.DAWN_X+10; __tick(1);
+    if(!g.dawnShown) throw new Error('reaching dawn did not fire the recap');
+    console.log('        lives/continue + clutch revive + dawn recap all ok');
   });
   scene('tourist boss: bus parks, photo hits in-frame and misses out-of-frame', ()=>{
     const g=__G(); g.clearEnts();

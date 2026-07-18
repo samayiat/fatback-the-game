@@ -112,6 +112,19 @@ input[type=range]{width:78px;accent-color:var(--club);height:14px}
 #notice.on{display:flex}
 #notice .sheet{max-width:340px;text-align:center;border:1px solid var(--club);background:#0e0c16;border-radius:6px;padding:22px}
 #notice p{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.09em;color:var(--bone);margin-bottom:16px;line-height:1.15}
+#continue,#builtdiff,#recap{position:absolute;inset:0;background:rgba(4,3,8,.93);z-index:46;display:none;
+  align-items:center;justify-content:center;padding:6%}
+#continue.on,#builtdiff.on,#recap.on{display:flex}
+#continue .sheet,#builtdiff .sheet,#recap .sheet{max-width:380px;text-align:center;border:1px solid var(--club);background:#0e0c16;border-radius:6px;padding:22px}
+#continue h3,#builtdiff h3,#recap h3{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:.09em;color:var(--bone);margin-bottom:12px;line-height:1.15}
+#builtdiff h3{color:var(--club)}
+#continue .sub,#builtdiff .sub{font-size:9px;color:#9990ad;margin-bottom:14px;line-height:1.6}
+#recap .stats{font-size:9px;line-height:2;color:#9990ad;margin-bottom:12px}
+#recap .stats b{color:var(--bone)}
+#recap .score{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:.06em;color:var(--sodium);margin-bottom:16px}
+#recap .score b{color:var(--piss)}
+.btnrow{display:flex;gap:8px;justify-content:center}
+.mini[disabled]{cursor:default}
 #a2hs .sheet{max-width:420px;border:1px solid #2f2b3d;background:#0e0c16;border-radius:6px;padding:18px}
 #a2hs h3{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:.14em;color:var(--sodium);margin-bottom:10px}
 #a2hs p{font-size:10px;line-height:1.7;color:#9990ad;margin-bottom:14px;white-space:pre-line}
@@ -205,6 +218,31 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
         <div class="sheet">
           <p id="noticeText"></p>
           <button class="mini" id="noticeOk">GOT IT</button>
+        </div>
+      </div>
+      <div id="continue">
+        <div class="sheet">
+          <h3>OUT OF LIVES</h3>
+          <div class="sub">One more round? Cash on the bar.</div>
+          <div class="btnrow">
+            <button class="mini" id="contPay">CONTINUE <span id="contCost">$50</span></button>
+            <button class="mini" id="contQuit">CALL IT</button>
+          </div>
+        </div>
+      </div>
+      <div id="builtdiff">
+        <div class="sheet">
+          <h3>NAH, I'M BUILT DIFFERENT</h3>
+          <div class="sub">100% confidence &middot; one free life &middot; 2.5&times; strength for 60s</div>
+          <button class="mini" id="builtLock">LOCK IN</button>
+        </div>
+      </div>
+      <div id="recap">
+        <div class="sheet">
+          <h3 id="recapHead">LAST CALL</h3>
+          <div class="stats" id="recapStats"></div>
+          <div class="score" id="recapScore"></div>
+          <button class="mini" id="recapAgain">ANOTHER ROUND</button>
         </div>
       </div>
     </div>
@@ -422,6 +460,48 @@ function setPause(v){ paused=v; $('pause').classList.toggle('on',v); }
 let noticeOn=false;
 function showNotice(txt){ noticeOn=true; $('noticeText').textContent=txt; $('notice').classList.add('on'); }
 $('noticeOk').onclick=()=>{ noticeOn=false; $('notice').classList.remove('on'); };
+
+// ---- THE NIGHT: continue prompt / clutch revive / dawn recap ----
+function nightTime(){                                   // 9:00 PM → 4:00 AM across the night's distance
+  const p=clamp(night.reach/DAWN_X,0,1);
+  const total=21*60 + Math.floor(p*7*60);               // minutes past midnight: 1260 (9PM) → 1680 (4AM)
+  const h=Math.floor(total/60), m=total%60;
+  const ampm = h>=24 ? 'AM' : 'PM';                     // the night only spans 9PM..4AM
+  const h12 = ((h%24+11)%12)+1;
+  return h12+':'+(m<10?'0':'')+m+' '+ampm;
+}
+function showContinue(){ continueOn=true;
+  const cost=continueCost(), broke=P.money<cost;
+  $('contCost').textContent='$'+cost;
+  $('contPay').disabled=broke; $('contPay').style.opacity=broke?0.4:1;
+  $('continue').classList.add('on');
+}
+function buyContinue(){ const cost=continueCost(); if(P.money<cost) return;
+  P.money-=cost; continues++; lives=1; continueOn=false; $('continue').classList.remove('on'); respawn(); }
+function callItNight(){ continueOn=false; $('continue').classList.remove('on'); showRecap('bust'); }
+$('contPay').onclick=buyContinue;
+$('contQuit').onclick=callItNight;
+function showBuiltDiff(){ builtOn=true; $('builtdiff').classList.add('on'); }
+function clutchRevive(){ builtOn=false; $('builtdiff').classList.remove('on');
+  lives=1; respawn();
+  P.dmgMul=2.5; P.dmgT=3600; P.builtT=3600;              // 2.5x strength, 60s, red glow
+  P.conf=confFloor();                                    // you spent your confidence to lock in
+  say(P.x,P.z-30,'BUILT DIFFERENT','#ff2e88'); shake=12; rumble(700,1,1,true); }
+$('builtLock').onclick=clutchRevive;
+function nightScore(){ return Math.round(P.x/16) + night.bosses*300 + night.women*75 + night.cash; }
+function showRecap(reason){
+  dawnShown=true;
+  const sc=nightScore(), isBest=sc>bestScore;
+  if(isBest){ bestScore=sc; try{ localStorage.setItem('fatback_best',String(sc)); }catch(e){} }
+  $('recapHead').textContent = reason==='dawn' ? "LAST CALL — YOU MADE THE NIGHT" : "THEY RAN YOU OUT";
+  $('recapStats').innerHTML =
+    'DISTANCE <b>'+Math.round(P.x/16)+'m</b>  ·  BOSSES <b>'+night.bosses+'</b>  ·  WOMEN <b>'+night.women+'</b><br>'+
+    'CASH <b>$'+night.cash+'</b>  ·  DEATHS <b>'+P.deaths+'</b>  ·  CONTINUES <b>'+continues+'</b>';
+  $('recapScore').innerHTML = 'NIGHT SCORE <b>'+sc+'</b>'+(isBest?'  <span style="color:#c9d13a">NEW BEST!</span>':'  ·  BEST '+bestScore);
+  $('recap').classList.add('on');
+}
+function anotherRound(){ $('recap').classList.remove('on'); reset(); setPause(false); }
+$('recapAgain').onclick=anotherRound;
 $('resume').onclick=()=>setPause(false);
 $('pauseBtn').onclick=()=>setPause(!paused);
 $('d_sober').onclick=()=>P.drunk=0;
@@ -630,18 +710,27 @@ let camX=0, camLock=null, t=0, shake=0, hitstop=0, camFlash=0;   // camFlash: th
 let boss=null, bossDone=0;                 // the current boss entity, and the highest 250m threshold started
 let bossDeaths=0, bossNagged=false;        // deaths in the current boss fight, and whether we've shown the tip
 let dateOn=false, date=null;               // the rhythm date mini-game
+// THE NIGHT: the run is one night. dawn (or getting run out of lives) ends it on a scored recap.
+const DAWN_X=32000;                         // ~2000m / ~8 bosses is a full night
+let lives=3, continues=0;                   // 3 lives, then pay to continue
+let night={bosses:0,women:0,cash:0,reach:0}; // recap tally + furthest reached THIS night (drives the dawn clock)
+let dawnShown=false, continueOn=false, builtOn=false;   // freeze flags: recap / continue prompt / clutch revive
+const CONTINUE_COSTS=[50,100,250];          // then $500 every time after
+const continueCost=()=> CONTINUE_COSTS[continues]!==undefined?CONTINUE_COSTS[continues]:500;
+let bestScore=(()=>{ try{ return +(localStorage.getItem('fatback_best')||0)||0; }catch(e){ return 0; } })();
 
 const P={};
 function reset(){
   Object.assign(P,{x:120,z:300,y:0,vy:0,face:1,hp:100,maxhp:100,drunk:0,conf:0,money:20,
     state:'idle',st:0,step:0,buf:0,connected:false,hitDone:false,driftPh:0,iframes:0,
     dmgMul:1,dmgT:0,fireT:0,scammedBy:null,lean:0,stumble:0,stumbleV:0,hitFlash:0,airT:0,deaths:0,
-    bottles:2,stepV:0,talkT:0,talkN:null,downT:0,knockV:0});
+    bottles:2,stepV:0,talkT:0,talkN:null,downT:0,knockV:0,builtT:0});
   U={liver:0,hands:0,body:0,chin:0,rep:0,game:0,eyes:0,boots:0,reach:0,knuck:0,hide:0,iron:0,pockets:0}; burgerCost=25;
   P.maxhp=100; P.conf=0;
 
   ents=[];drops=[];parts=[];floats=[];fires=[];camLock=null;camX=0;camFlash=0;
   boss=null; bossDone=0; bossDeaths=0; bossNagged=false; gauntlet=0; gauntletIx=0; dateOn=false; date=null; $('touch').classList.remove('dating');
+  lives=3; continues=0; night={bosses:0,women:0,cash:0,reach:0}; dawnShown=false;   // fresh night
   cans=[]; npcs=[]; crowd=[]; cars=[]; litter=[]; steam=[]; props=[];
   BUILDINGS=[]; CLUBS=[]; GRATES=[]; GATES=[]; MADE.clear();
   best=Math.max(best||0, 0);
@@ -905,6 +994,7 @@ function devBoss(arch){
 
 function killBoss(b){
   b.dead=1; b.state='dead'; b.tok=false;
+  night.bosses++;                           // one for the night's tally
   fires=fires.filter(f=>!f.foe);            // his last shots die with him
   P.conf=Math.min(100,P.conf+20);
   P.hp=Math.min(P.maxhp, P.hp+Math.round(P.maxhp*0.6));   // the reward that lets you keep going
@@ -1259,11 +1349,13 @@ function resolveTalk(n){
   if(app < HIGH_TIER){                                  // low-key woman: easy, safe confidence. no risk, no boost.
     const cg=Math.round(11+(HIGH_TIER-app)*1.5);        // lower rated → a touch more (up to ~19). always free.
     P.conf=Math.min(100,P.conf+cg); say(n.x,n.z,'+'+cg+' CONF','#c9d13a'); rumble(200,.3,.6,true);
+    night.women++;
     return;
   }
   // high-stakes woman — big reward or she plays you
   const o=scamOutcome(n,app);
   if(o.robbed){ scammed(n,o.lost,o.lowc,'PISSED'); return; }
+  night.women++;
   highReward(n);
 }
 
@@ -1346,10 +1438,15 @@ function resolveDate(n,score){
   if(o.robbed){ scammed(n,o.lost,o.lowc,'PLAYED'); return; }   // charmed... and cleaned out
   const cg=Math.round(6+score*12); P.conf=Math.min(100,P.conf+cg);
   say(n.x,n.z,'+'+cg+' CONF','#c9d13a'); rumble(220,.4,.6,true);
-  if(score>=0.8 && app>=9.5){                            // nailed a real 10/10 — the big payoff
-    if(Math.random()<0.4 && camLock===null && !boss){
+  night.women++;
+  if(score>=0.8 && app>=9.5){                            // nailed a real 10/10 — the big payoff (a 3-way roll)
+    const r=Math.random();
+    if(r<0.3 && camLock===null && !boss){               // her man shows up
       say(n.x,n.z-32,'...HER MAN','#ff2e88'); say(P.x,P.z-30,'INCOMING','#ff5a2e');
       camLock=Math.max(0,P.x-170); spawnBoss(Math.max(1,Math.floor(P.x/4000)+1));
+    } else if(r<0.55){                                   // she's a keeper — an extra life
+      lives++; say(P.x,P.z-24,'+1 LIFE','#ff2e88'); say(n.x,n.z-32,'A KEEPER','#c9d13a');
+      rumble(400,1,.8,true); shake=4; blip(700,.08);
     } else highReward(n);                                // stat boost + flame powers
   }
 }
@@ -1609,6 +1706,7 @@ function update(){
 
   //---- meters
   if(camFlash>0) camFlash-=0.10;                 // the photo whiteout fades
+  if(P.builtT>0) P.builtT--;                      // BUILT DIFFERENT red-glow window
   P.drunk=Math.max(0,P.drunk-0.006);
   // confidence bleeds all the time — you top it back up by chatting up low-key women (easy, safe).
   // REP (confFloor) sets the level it can never drop below.
@@ -1706,8 +1804,8 @@ function update(){
       if(d.y<=0){ d.y=0; if(d.kind==='tooth'&&Math.abs(d.vy)>1.4){d.vy*=-0.42;d.vx*=0.6;} else {d.land=1;d.vy=0;} } }
     if(--d.life<0) d.gone=true;
     if(Math.abs(d.x-P.x)<20&&Math.abs(d.z-P.z)<14&&P.y<20){ d.gone=true;
-      if(d.kind==='cash'){ const m=Math.floor(rnd(5,18)); P.money+=m; say(d.x,d.z,'+$'+m,'#c9d13a'); }
-      if(d.kind==='tooth'){ P.money+=5; say(d.x,d.z,'+$5','#e8e2d4'); }
+      if(d.kind==='cash'){ const m=Math.round(Math.floor(rnd(5,18))*(1+U.pockets*0.15)); P.money+=m; night.cash+=m; say(d.x,d.z,'+$'+m,'#c9d13a'); }   // POCKETS: you pocket more
+      if(d.kind==='tooth'){ const m=5+U.pockets; P.money+=m; night.cash+=m; say(d.x,d.z,'+$'+m,'#e8e2d4'); }
       if(d.kind==='jameson'||d.kind==='bottle'){ P.bottles++; say(d.x,d.z,'+1 BOTTLE','#c9d13a'); }
       if(d.kind==='burger'){ const heal=Math.round(P.maxhp*0.35); P.hp=Math.min(P.maxhp,P.hp+heal); say(d.x,d.z,'+'+heal+' HP','#ffb545'); blip(600,.05); }
       blip(520,.04); } }
@@ -1769,7 +1867,8 @@ function update(){
   fires=fires.filter(f=>!f.gone);
 
   stream();
-  best=Math.max(best,P.x);
+  best=Math.max(best,P.x); night.reach=Math.max(night.reach,P.x);
+  if(!dawnShown && night.reach>=DAWN_X && camLock===null) showRecap('dawn');   // made it to last call
   ambient();
 
   //---- the crowd notices you
@@ -1793,20 +1892,22 @@ function update(){
     P.deaths++;
     if(boss && camLock!==null){ bossDeaths++;          // dying to the boss you're currently fighting
       if(bossDeaths>2 && !bossNagged){ bossNagged=true; showNotice('YOU SHOULD TRY NOT TO GET HIT'); } }
-    P.hp=P.maxhp; P.drunk=0; P.money=Math.floor(P.money*(0.5+U.pockets*0.2));   // POCKETS: keep more when you fall
-    P.x=Math.max(20,camX+40); P.z=300; P.y=0; P.vy=0; P.state='idle';
-    P.step=0; P.buf=0; P.talkN=null; P.downT=0;
-    P.iframes=110;              // a beat to get back in it, not a clean slate
-    fires=[];                   // the flames on the pavement go out. the rats don't.
-    // they're still standing there. they just stop mid-swing and re-approach.
-    for(const e of ents){ if(e.dead) continue;
-      e.tok=false; e.hitstun=0; e.hitDone=true;
-      if(e.state==='atk'||e.state==='breathe'||e.state==='stun') e.state='walk';
-      e.cd=rnd(45,120);
-    }
-    say(P.x,P.z,'LAST CALL · '+Math.floor(best/16)+'m','#ff2e88');
-    shake=9; rumble(700,1,1,true);
+    lives--;
+    if(lives>0){ respawn(); say(P.x,P.z,lives+(lives>1?' LIVES':' LIFE')+' LEFT','#ff2e88'); }
+    else if(P.conf>=99.5) showBuiltDiff();             // bar reads 100 (per-tick bleed already shaved it) → free clutch revive
+    else showContinue();                               // out of lives → pay to continue, or call it
   }
+}
+// put the player back on their feet in place — no money loss; lives are the cost now.
+function respawn(){
+  P.hp=P.maxhp; P.drunk=0; P.x=Math.max(20,camX+40); P.z=300; P.y=0; P.vy=0; P.state='idle';
+  P.step=0; P.buf=0; P.talkN=null; P.downT=0; P.iframes=110;
+  fires=[];
+  for(const e of ents){ if(e.dead) continue;
+    e.tok=false; e.hitstun=0; e.hitDone=true;
+    if(e.state==='atk'||e.state==='breathe'||e.state==='stun') e.state='walk';
+    e.cd=rnd(45,120); }
+  shake=9; rumble(700,1,1,true);
 }
 
 //====================== render ======================
@@ -2593,6 +2694,9 @@ function drawPlayer(){
   // red when you eat one, blue while the whiskey goes down
   let tint=null, amt=0;
   if(P.state==='drink'){ tint='#2f8fff'; amt=.30+.32*Math.sin(P.st*.42); }
+  if(P.builtT>0){ tint='#ff2a2a'; amt=.35+.25*Math.sin(t*0.4);   // BUILT DIFFERENT — glowing red
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=.22+.14*Math.sin(t*0.4);
+    ctx.fillStyle='#ff2a2a'; ctx.beginPath(); ctx.ellipse(P.x-camX, P.z-P.y-24, 22, 32, 0,0,7); ctx.fill(); ctx.restore(); }
   if(P.hitFlash>0){ tint='#ff1a1a'; amt=.55+.45*Math.sin(P.hitFlash*1.1); }
   if(P.iframes>0 && P.hitFlash<=0 && t%6<3) ctx.globalAlpha=.5;
   // he leans. the sprite tilts with the drift so you can SEE why you're missing the door.
@@ -2698,6 +2802,15 @@ function hud(){
   ctx.fillStyle='#0b0a10'; ctx.fillText('CONF '+Math.round(P.conf),LX+4,CY+5);
   ctx.strokeStyle='#3a3550'; ctx.strokeRect(LX-.5,CY-.5,BW+1,7);
 
+  // LIVES — the run's stakes
+  const VY=CY+10;
+  ctx.textAlign='left'; ctx.fillStyle='#5c5670'; ctx.font='6px "JetBrains Mono",monospace';
+  ctx.fillText('LIVES', LX, VY+5);
+  for(let i=0;i<Math.min(lives,8);i++){ ctx.fillStyle=P.builtT>0?'#ff2a2a':'#ff2e88';
+    ctx.beginPath(); ctx.arc(LX+30+i*9, VY+2, 3, 0, 7); ctx.fill(); }
+  if(lives>8){ ctx.fillStyle='#ff2e88'; ctx.fillText('+'+(lives-8), LX+30+8*9, VY+5); }
+  if(P.builtT>0){ ctx.fillStyle='#ff2a2a'; ctx.fillText('BUILT DIFFERENT · '+Math.ceil(P.builtT/60)+'s', LX, VY+13); }
+
   ctx.textAlign='right'; ctx.font='9px "JetBrains Mono",monospace'; ctx.fillStyle='#c9d13a';
   ctx.fillText('$'+P.money,W-12,20);
   // ranks you've bought, in the order they matter
@@ -2722,10 +2835,14 @@ function hud(){
   if(boss && !boss.dead){ drawBossBar(); }               // a boss owns the top of the screen
   else {
   ctx.textAlign='center';
+  // night progress toward dawn (a bar that finally fills)
+  const np=clamp(night.reach/DAWN_X,0,1);
+  ctx.fillStyle='#231f30'; ctx.fillRect(W/2-52,3,104,2);
+  ctx.fillStyle='#ffb545'; ctx.fillRect(W/2-52,3,104*np,2);
   ctx.font='bold 11px "JetBrains Mono",monospace'; ctx.fillStyle='#e8e2d4';
   ctx.fillText(Math.floor(P.x/16)+'m', W/2, 18);
   ctx.font='7px "JetBrains Mono",monospace'; ctx.fillStyle='#5c5670';
-  ctx.fillText('BLOCK '+(tier()+1)+(best>P.x?'   BEST '+Math.floor(best/16)+'m':'')
+  ctx.fillText(nightTime()+'   BLOCK '+(tier()+1)+(best>P.x?'   BEST '+Math.floor(best/16)+'m':'')
     +(P.deaths?'   ✕'+P.deaths:''), W/2, 27);
   // next gate on the horizon
   const ng=GATES.filter(g=>!g.done&&g.x>P.x).sort((a,b)=>a.x-b.x)[0];
@@ -2927,8 +3044,8 @@ function titleCard(g){
   const hint = PAD.idx!==null ? 'A  ·  START' : (OPT.touch ? 'TAP ANYWHERE' : 'ANY KEY  ·  TAP  ·  GAMEPAD');
   spaced(g,hint,W/2,212,1.4);
 
-  if(best>200){ g.fillStyle='#ffb545'; g.font='7px "JetBrains Mono",monospace';
-    spaced(g,'BEST  '+Math.floor(best/16)+'m',W/2,224,1.4); }
+  if(bestScore>0){ g.fillStyle='#ffb545'; g.font='7px "JetBrains Mono",monospace';
+    spaced(g,'BEST NIGHT  '+bestScore,W/2,224,1.4); }
   g.restore();
 }
 
@@ -2972,7 +3089,7 @@ function loop(now){ requestAnimationFrame(loop);
     if(gp && gp.buttons.some(b=>b&&b.pressed)) startGame();
     titleRender(); return;
   }
-  if(noticeOn||paused||shopOpen){ acc=0; render(); return; }
+  if(dawnShown||continueOn||builtOn||noticeOn||paused||shopOpen){ acc=0; render(); return; }
   while(acc>=1/60){ update(); acc-=1/60; }
   render();
 }
