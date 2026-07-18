@@ -2428,6 +2428,13 @@ function shadow(x,z,r){ ctx.globalAlpha=.34; ctx.fillStyle='#000';
 
 function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0), z=c.z;
   shadow(c.x,c.z, c.type==='dumpster'?18:13);
+
+  // try sprite for dumpster
+  if(c.type==='dumpster' && IDX['prop.dumpster']){
+    spr('prop.dumpster', sx, z, 1);
+    return;
+  }
+
   if(c.type==='box'){
     ctx.fillStyle='#7a5a34'; ctx.fillRect(sx-11,z-20,22,20);
     ctx.fillStyle='#8f6b40'; ctx.fillRect(sx-11,z-20,22,4);            // flaps
@@ -2439,6 +2446,7 @@ function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0), z=c.z;
     ctx.strokeStyle='#4c3818'; ctx.lineWidth=1.5;                     // cross-bracing
     ctx.beginPath(); ctx.moveTo(sx-11,z-21); ctx.lineTo(sx+11,z-3); ctx.moveTo(sx+11,z-21); ctx.lineTo(sx-11,z-3); ctx.stroke();
   } else if(c.type==='dumpster'){
+    // fallback procedural (shouldn't reach here if sprite available)
     ctx.fillStyle='#2f5a3a'; ctx.fillRect(sx-18,z-26,36,26);
     ctx.fillStyle='#264a30'; ctx.fillRect(sx-18,z-14,36,2);
     ctx.fillStyle='#3a6e48'; ctx.fillRect(sx-20,z-31,40,6);            // lid
