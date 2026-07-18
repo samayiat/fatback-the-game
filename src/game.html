@@ -697,9 +697,9 @@ function genChunk(ci){
   for(let i=0;i<3;i++){ const ty=['can','box','crate','dumpster'][Math.floor(R()*4)];
     cans.push({x:x0+40+R()*(CHUNK-80), z:FLOOR_N+8+R()*(FLOOR_S-FLOOR_N-16), type:ty,
       hp: ty==='box'?1:ty==='dumpster'?3:2, w: ty==='dumpster'?18:11, shake:0, dead:false, chunk:ci}); }
-  // street furniture against the storefronts — trees, hydrants, benches, mailboxes, signs, crates.
+  // street furniture against the storefronts — trees (procedural), hydrants, benches, mailboxes, signs, crates.
   // (gate + lamp dropped — gate sprite has baked-in graffiti; lamps not wanted)
-  for(let i=0;i<8;i++){ const ty=['tree','tree2','tree2','hydrant','bench','mailbox','sign','crate2'][Math.floor(R()*8)];
+  for(let i=0;i<8;i++){ const ty=['tree','tree','tree','hydrant','bench','mailbox','sign','crate2'][Math.floor(R()*8)];
     props.push({x:x0+30+R()*(CHUNK-60), z:FLOOR_N-2+R()*22, type:ty, ph:R()*9, chunk:ci}); }
   for(let i=0;i<8;i++) crowd.push({x:x0+R()*CHUNK, z:FLOOR_N-9+R()*7, ph:R()*9, blob:true, chunk:ci});
   if(ci>0) { const gx = x0+240+R()*280; GATES.push({x:gx, done:false, chunk:ci}); console.log("GATE created at x=" + gx + " chunk=" + ci); }
