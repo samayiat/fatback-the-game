@@ -2462,16 +2462,17 @@ function drawCan(c){ const sx=c.x-camX+(c.shake?rnd(-1.5,1.5):0), z=c.z;
 }
 
 // decorative street furniture — never breaks, just gives the block character
+let logged_props=new Set();
 function drawProp(pr){ const sx=pr.x-camX, z=pr.z;
   // try to draw as sprite first (hydrant, mailbox, sign, gate, etc.)
   const spriteKey = `prop.${pr.type}`;
   if(IDX[spriteKey]){
-    if(t%300===0 && (pr.type==='lamp' || pr.type==='tree2' || pr.type==='crate2')) console.log("✓ Drawing sprite", spriteKey);
+    if(!logged_props.has(spriteKey)) { console.log("✓ SPRITE FOUND & DRAWING:", spriteKey); logged_props.add(spriteKey); }
     shadow(pr.x,pr.z,8);
     spr(spriteKey, sx, z, 1);  // face=1 (east), no tint
     return;
-  } else if(t%300===0 && (pr.type==='lamp' || pr.type==='tree2' || pr.type==='crate2')){
-    console.log("✗ SPRITE NOT FOUND:", spriteKey, "IDX keys:", Object.keys(IDX).filter(k=>k.includes('prop')).slice(-10));
+  } else {
+    if(!logged_props.has(spriteKey)) { console.log("✗ SPRITE MISSING:", spriteKey, " → fallback procedural"); logged_props.add(spriteKey); }
   }
 
   // fallback to procedural drawing
