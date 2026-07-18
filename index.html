@@ -54,6 +54,7 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch
 #pauseBtn{position:absolute;left:50%;top:2.5%;opacity:0;pointer-events:none;transition:opacity .2s;transform:translateX(-50%);width:34px;height:22px;border-radius:4px;
   border:1px solid #2f2b3d;background:rgba(15,13,22,.6);display:flex;align-items:center;justify-content:center;
   color:var(--dim);font-size:11px;pointer-events:auto;letter-spacing:.1em}
+#devHotspot{position:absolute;right:0;bottom:0;width:80px;height:80px;opacity:0;cursor:pointer}
 
 
 /* ---- pause ---- */
@@ -248,7 +249,7 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
         </div>
       </div>
     </div>
-    <!-- dev hotspot for testing -->
+    <div id="devHotspot"></div>
   </div>
 </div>
 <script>
@@ -507,6 +508,7 @@ function anotherRound(){ $('recap').classList.remove('on'); reset(); setPause(fa
 $('recapAgain').onclick=anotherRound;
 $('resume').onclick=()=>setPause(false);
 $('pauseBtn').onclick=()=>setPause(!paused);
+$('devHotspot').onclick=()=>{ if(mode==='title') startSolo(); };
 $('d_sober').onclick=()=>P.drunk=0;
 $('d_drunk').onclick=()=>P.drunk=Math.min(100,P.drunk+40);
 $('d_cash').onclick=()=>P.money+=100;
