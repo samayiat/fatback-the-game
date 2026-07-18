@@ -3301,7 +3301,7 @@ function render(){
   list.push({z:P.z,f:drawPlayer});
 
   // multiplayer: publish state and add remotes to render list
-  if(MP && typeof Playroom !== "undefined"){
+  if(MP && typeof Playroom !== "undefined" && Playroom.myPlayer()){
     Playroom.myPlayer().setState("pos", {x: P.x, y: P.y, z: P.z, state: P.state});
     for(const o of others){
       const pos = o.getState("pos");
