@@ -1059,7 +1059,7 @@ function updateBoss(b){
     b.enraged=true; b.hp=Math.round(b.maxhp*0.5); b.enrageT=1;   // b.enraged is one-way → the heal only ever happens once
     shake=15; hitstop=9; rumble(640,1,1,true);
     for(let i=0;i<20;i++) puff(b.x+rnd(-30,30), b.z, rnd(0,b.h), 1, '#ff2a2a');
-    say(b.x,b.z-96,'NOT DONE WITH YOU',b.pal.glow); say(b.x,b.z-80,'SECOND WIND','#ff2a2a'); blip(110,.16);
+    say(b.x,b.z-92,'NOT GOING LIKE THAT','#ff2a2a'); blip(110,.16);
   }
   if(b.enraged && b.state!=='dead'){ b.enrageT=(b.enrageT||0)+1;
     b.cd -= 0.8;                                 // presses attacks harder — comes at you faster
@@ -2782,7 +2782,7 @@ function drawBossBar(){
   const bw=W-150, bx=(W-bw)/2, by=14;
   ctx.textAlign='center';
   ctx.fillStyle=b.enraged?'#ff2a2a':b.pal.glow; ctx.font='bold 8px "JetBrains Mono",monospace';
-  ctx.fillText(b.name + (b.enraged?'  ◆ ENRAGED ◆':''), W/2, by-3);
+  ctx.fillText(b.name + (b.enraged?'  ◆ NOT GOING LIKE THAT ◆':''), W/2, by-3);
   ctx.fillStyle='rgba(6,4,10,.85)'; ctx.fillRect(bx-2,by,bw+4,7);
   ctx.fillStyle='#3a1220'; ctx.fillRect(bx,by+1,bw,5);
   ctx.fillStyle= b.enraged?'#ff2a2a':(fr>.5?'#ff2e88':fr>.25?'#ff8c3a':'#ff5a2e');
