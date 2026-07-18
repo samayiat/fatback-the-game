@@ -9,6 +9,7 @@
 <title>FATBACK</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://unpkg.com/playroomkit/multiplayer.full.umd.js" crossorigin></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=JetBrains+Mono:wght@400;700&display=swap');
 :root{--sodium:#ffb545;--piss:#c9d13a;--club:#ff2e88;--ink:#0b0a10;--bone:#e8e2d4;--dim:#5c5670}
@@ -290,7 +291,7 @@ async function goLandscape(){
   layout();
 }
 addEventListener('pointerdown',function once(){ goLandscape(); removeEventListener('pointerdown',once); },{once:true});
-addEventListener('pointerdown',()=>{ if(mode==='title') startGame(); });
+addEventListener('pointerdown',()=>{ if(mode==='title') startSolo(); });
 
 //====================== atlas ======================
 const sheet=new Image(); const flip=document.createElement('canvas');
@@ -523,7 +524,12 @@ $('shopList').addEventListener('click',e=>{ const it=e.target.closest('.item'); 
 //====================== input ======================
 const key={}, pressed={};
 addEventListener('keydown',e=>{
-  if(mode==='title'){ startGame(); e.preventDefault(); return; }
+  if(mode==='title'){
+    if(e.code==='KeyC') startCoop();
+    else startSolo();
+    e.preventDefault();
+    return;
+  }
   if(e.code==='Escape'){setPause(!paused);return;}
   if(!key[e.code])pressed[e.code]=true; key[e.code]=true;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault(); });
@@ -1675,7 +1681,7 @@ function hurtPlayer(dmg,fromX,sober){
     P.talkN=null;
   }
   P.hp-=dmg*(1-U.hide*0.12)*(1-P.drunk/100*0.35);   // HIDE thickens your skin; being DRUNK dulls the pain (up to 35% off at full)
-  P.iframes=42; P.hitFlash=16; shake=4; hitstop=4; P.state='idle'; P.step=0; P.buf=0;
+  P.iframes=42; P.hitFlash=16; shake=4; hitstop=4; P.state='idle'; P.step=0; P.st=0; P.buf=0;
   rumble(200,.95,.5,true);
   P.face=fromX>P.x?1:-1; P.x-=Math.sign(fromX-P.x)*10;
   puff(P.x,P.z,50,5,'#ff2e88'); blip(90,.08);
@@ -3097,6 +3103,23 @@ function drawPlayer(){
     ctx.fillStyle='#ff2e88'; ctx.font='bold 9px "JetBrains Mono",monospace'; ctx.textAlign='center';
     if(t%12<8) ctx.fillText('MASH!', sx, P.z-100); } }
 
+function drawRemotePlayer(state, pos, playerIndex){
+  // draw a remote player at (pos.x, pos.y, pos.z) with co-op color tint
+  const sx = pos.x - camX;
+  const sy = pos.z - pos.y;
+  shadow(pos.x, pos.z, 16 - pos.y * 0.06);
+  let key = 'hero.rot.east';
+  if(pos.state === 'walk') key = 'hero.walk.' + (Math.floor(t*0.16)%6);
+  if(pos.state === 'idle') key = 'hero.rot.east';
+  if(pos.state === 'jump') key = 'hero.jump.' + clamp(Math.floor(pos.y/4.4), 0, 7);
+  if(pos.state === 'punch') key = 'hero.rot.east';  // simplified: no combo tracking for remotes
+
+  // player colors: red, blue, green, yellow
+  const playerColors = ['#ff2a2a', '#2f8fff', '#2fa01f', '#ffb545'];
+  const tint = playerColors[playerIndex % 4];
+  spr(key, sx, sy, 1, tint, 0.35);  // face=1 (east), tint by player, alpha for visibility
+}
+
 function drawDrop(d){ const sx=d.x-camX, y=d.z-d.y; shadow(d.x,d.z,5);
   if(d.kind==='tooth'){ ctx.fillStyle='#f4efe2'; ctx.fillRect(sx-2,y-3,4,5); ctx.fillStyle='#c9c2ae'; ctx.fillRect(sx-2,y+1,4,1); }
   if(d.kind==='cash'){ ctx.fillStyle='#c9d13a'; ctx.fillRect(sx-5,y-4,10,6); ctx.fillStyle='#8b9426'; ctx.fillRect(sx-2,y-2,4,2); }
@@ -3267,6 +3290,20 @@ function render(){
   for(const d of drops) list.push({z:d.z,f:()=>drawDrop(d)});
   for(const e of ents) list.push({z:e.z,f:()=>e.k==='boss'?drawBoss(e):e.k==='rat'?drawRat(e):e.k==='sammich'?drawSammich(e):drawVamp(e)});
   list.push({z:P.z,f:drawPlayer});
+
+  // multiplayer: publish state and add remotes to render list
+  if(MP && typeof Playroom !== "undefined"){
+    Playroom.myPlayer().setState("pos", {x: P.x, y: P.y, z: P.z, state: P.state});
+    for(const o of others){
+      const pos = o.getState("pos");
+      if(pos) {
+        // get player index: count how many players are before this one
+        const playerIndex = Playroom.getAllPlayers().findIndex(p => p.id === o.id);
+        list.push({z: pos.z, f: ()=>drawRemotePlayer(o, pos, playerIndex)});
+      }
+    }
+  }
+
   list.sort((a,b)=>a.z-b.z);
   for(const o of list) o.f();
 
@@ -3363,6 +3400,10 @@ function composite(){
 //====================== title ======================
 // the street is already simulating. park the camera on it and let him drink.
 let mode='title', titleT=0, started=false;
+
+// PlayroomKit multiplayer
+let MP = false;          // multiplayer session?
+const others = [];       // remote player states
 
 function titleTick(){
   t++; titleT++;
@@ -3466,6 +3507,29 @@ function titleRender(){
   ctx.restore();
   composite();          // the street rolls, ghosts and warps...
   titleCard(dctx);      // ...the sign doesn't.
+}
+
+async function startCoop(){
+  if(typeof Playroom === "undefined") return startSolo();   // safety net / headless harness
+  MP = true;
+  try {
+    await Playroom.insertCoin({ maxPlayersPerRoom: 4, matchmaking: true });
+    Playroom.onPlayerJoin((state) => {
+      if(state.id === Playroom.myPlayer().id) return;  // skip self
+      others.push(state);
+      state.onQuit(() => others.splice(others.indexOf(state), 1));
+    });
+    startGame();
+  } catch(e) {
+    console.error("PlayroomKit error:", e);
+    startSolo();
+  }
+}
+
+function startSolo(){
+  MP = false;
+  others.length = 0;
+  startGame();
 }
 
 function startGame(){
