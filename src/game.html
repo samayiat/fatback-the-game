@@ -2466,9 +2466,12 @@ function drawProp(pr){ const sx=pr.x-camX, z=pr.z;
   // try to draw as sprite first (hydrant, mailbox, sign, gate, etc.)
   const spriteKey = `prop.${pr.type}`;
   if(IDX[spriteKey]){
+    if(t%300===0 && (pr.type==='lamp' || pr.type==='tree2' || pr.type==='crate2')) console.log("✓ Drawing sprite", spriteKey);
     shadow(pr.x,pr.z,8);
     spr(spriteKey, sx, z, 1);  // face=1 (east), no tint
     return;
+  } else if(t%300===0 && (pr.type==='lamp' || pr.type==='tree2' || pr.type==='crate2')){
+    console.log("✗ SPRITE NOT FOUND:", spriteKey, "IDX keys:", Object.keys(IDX).filter(k=>k.includes('prop')).slice(-10));
   }
 
   // fallback to procedural drawing
