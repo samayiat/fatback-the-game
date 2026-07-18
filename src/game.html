@@ -1393,7 +1393,7 @@ function connect(e,s){
 //  YOU: hold ↓+punch to grab a mark; you both lock; a wind-up fills; then you HURL them into the street.
 //       you're defenseless the whole time — take a hit and the grab breaks. release early to bail.
 //  THEM: near the curb an enemy can grab YOU. mash punch to break free, or they throw you into traffic.
-const GRAB_WIND=84;          // frames you hold before the toss launches (~1.4s)
+const GRAB_WIND=48;          // frames you hold before the toss launches (~0.8s — snappy, still a commitment)
 const EGRAB_LEN=82;          // frames an enemy holds you before hurling you into the street
 const EGRAB_ESCAPE=7;        // punch-mashes needed to break their grip
 function atCurb(){ return P.z > FLOOR_S-34 && P.y===0 && P.state!=='down' && P.state!=='caged' && P.state!=='grabbed'; }
@@ -1409,6 +1409,7 @@ function tryGrab(){                                         // begin a grab (↓
   const e=grabbable(); if(!e) return false;
   P.face = e.x>=P.x?1:-1;
   P.state='grab'; P.grabE=e; P.grabT=0; P.step=0; P.buf=0;
+  P.iframes=Math.max(P.iframes,9);                          // a couple i-frames as you commit to the grab
   e.state='held'; e.tok=false; e.hitstun=999; e.vx=0; e.vy=0;
   blip(120,.05); rumble(160,.5,.5,true); say(e.x,e.z-30,'GRABBED','#ffb545');
   return true;
@@ -1423,7 +1424,7 @@ function launchGrabbed(){                                   // the wind-up compl
   e.vx=P.face*rnd(1.6,2.4); e.vy=4.8; e.y=Math.max(e.y,4);
   shake=Math.max(shake,6); blip(180,.07); rumble(260,.8,.6,true);
   say(e.x,e.z-34,'INTO TRAFFIC','#ffb545');
-  P.grabE=null; P.state='idle'; P.step=0; P.buf=0;
+  P.grabE=null; P.state='idle'; P.step=0; P.buf=0; P.iframes=Math.max(P.iframes,10);   // brief grace on the release/recovery
 }
 function splatInTraffic(e,c){                               // a car finds a body in the road
   e.dead=1; e.splat=1; e.vx=Math.sign(c.spd||1)*Math.min(9,Math.abs(c.spd)); e.vy=0; e.y=0;
