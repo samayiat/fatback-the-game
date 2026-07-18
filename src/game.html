@@ -3527,11 +3527,15 @@ function titleRender(){
 }
 
 async function startCoop(){
-  if(typeof Playroom === "undefined") return startSolo();   // safety net / headless harness
+  console.log("startCoop called, Playroom defined?", typeof Playroom !== "undefined");
+  if(typeof Playroom === "undefined") { console.log("Playroom undefined, falling back to solo"); return startSolo(); }
   MP = true;
   try {
+    console.log("Calling insertCoin...");
     await Playroom.insertCoin({ maxPlayersPerRoom: 4, matchmaking: true });
+    console.log("insertCoin succeeded");
     Playroom.onPlayerJoin((state) => {
+      console.log("Player joined:", state.id);
       if(state.id === Playroom.myPlayer().id) return;  // skip self
       others.push(state);
       state.onQuit(() => others.splice(others.indexOf(state), 1));
