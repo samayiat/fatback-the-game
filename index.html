@@ -1389,14 +1389,14 @@ function connect(e,s){
   return crit;
 }
 
-// ---- TOSS INTO TRAFFIC: at the curb, a staggered enemy can be shoved off into the street.
-//      time it with a passing car and it's a splat. it only exists where the road is — pure context. ----
-function atCurb(){ return P.z > FLOOR_S-26 && P.y===0 && P.state!=='down' && P.state!=='caged'; }   // standing on the edge of the sidewalk
-function grabbable(){                                       // nearest live, staggered enemy in shove range
+// ---- TOSS INTO TRAFFIC: at the curb, an adjacent enemy gets shoved off into the street instead of
+//      punched. time it with a passing car and it's a splat. it only exists where the road is. ----
+function atCurb(){ return P.z > FLOOR_S-34 && P.y===0 && P.state!=='down' && P.state!=='caged'; }   // standing near the edge of the sidewalk
+function grabbable(){                                       // nearest live enemy within shove reach of the curb
   let best=null,bd=1e9;
   for(const e of ents){ if(e.dead||e.k==='boss') continue;
-    if(!(e.hitstun>0 || e.state==='stun' || e.state==='launch')) continue;   // has to be rocked first
-    if(Math.abs(e.x-P.x)<46 && Math.abs(e.z-P.z)<28){ const dd=Math.abs(e.x-P.x); if(dd<bd){ bd=dd; best=e; } } }
+    if(e.state==='thrown'||e.state==='road') continue;     // already in the street
+    if(Math.abs(e.x-P.x)<52 && Math.abs(e.z-P.z)<32){ const dd=Math.abs(e.x-P.x); if(dd<bd){ bd=dd; best=e; } } }
   return best;
 }
 function tryToss(){
