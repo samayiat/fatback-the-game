@@ -55,6 +55,15 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch
   border:1px solid #2f2b3d;background:rgba(15,13,22,.6);display:flex;align-items:center;justify-content:center;
   color:var(--dim);font-size:11px;pointer-events:auto;letter-spacing:.1em}
 
+/* ---- title screen overlay ---- */
+#titleOverlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:flex-end;z-index:15;padding:4% 2% 8%}
+#titleOverlay.show{display:flex}
+.titleBtns{display:flex;gap:clamp(12px,3vw,32px);justify-content:center}
+.titleBtn{font-family:'Bebas Neue',sans-serif;font-size:clamp(20px,4vmin,32px);letter-spacing:.12em;
+  padding:clamp(10px,2vmin,16px) clamp(24px,4vmin,48px);border:2px solid var(--club);background:rgba(60,14,34,.7);
+  color:var(--sodium);cursor:pointer;border-radius:4px;transition:all .15s;text-transform:uppercase}
+.titleBtn:active,.titleBtn:hover{background:rgba(255,46,136,.3);transform:scale(.97)}
+
 /* ---- pause ---- */
 #pause{position:absolute;inset:0;background:rgba(6,4,10,.88);backdrop-filter:blur(6px);
   display:none;flex-direction:column;align-items:center;justify-content:center;gap:0;z-index:20;padding:4%}
@@ -244,6 +253,12 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
           <div class="stats" id="recapStats"></div>
           <div class="score" id="recapScore"></div>
           <button class="mini" id="recapAgain">ANOTHER ROUND</button>
+        </div>
+      </div>
+      <div id="titleOverlay">
+        <div class="titleBtns">
+          <button class="titleBtn" id="soloBtn">SOLO</button>
+          <button class="titleBtn" id="coopBtn">CO-OP</button>
         </div>
       </div>
     </div>
@@ -505,6 +520,8 @@ function anotherRound(){ $('recap').classList.remove('on'); reset(); setPause(fa
 $('recapAgain').onclick=anotherRound;
 $('resume').onclick=()=>setPause(false);
 $('pauseBtn').onclick=()=>setPause(!paused);
+$('soloBtn').onclick=startSolo;
+$('coopBtn').onclick=startCoop;
 $('d_sober').onclick=()=>P.drunk=0;
 $('d_drunk').onclick=()=>P.drunk=Math.min(100,P.drunk+40);
 $('d_cash').onclick=()=>P.money+=100;
@@ -3541,6 +3558,7 @@ function startGame(){
   goLandscape();
   $('touch').classList.toggle('on',OPT.touch);
   const pb=$('pauseBtn'); pb.style.opacity='1'; pb.style.pointerEvents='auto';
+  $('titleOverlay').classList.remove('show');  // hide title buttons when game starts
 }
 
 //====================== loop ======================
@@ -3548,6 +3566,7 @@ let acc=0,last=performance.now();
 function loop(now){ requestAnimationFrame(loop);
   acc+=Math.min(.1,(now-last)/1000); last=now;
   if(mode==='title'){
+    $('titleOverlay').classList.add('show');  // show buttons on title screen
     while(acc>=1/60){ titleTick(); acc-=1/60; }
     const gp = PAD.idx!==null ? navigator.getGamepads()[PAD.idx] : null;
     if(gp && gp.buttons.some(b=>b&&b.pressed)) startGame();
