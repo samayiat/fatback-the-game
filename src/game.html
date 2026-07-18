@@ -3303,8 +3303,10 @@ function render(){
   // multiplayer: publish state and add remotes to render list
   if(MP && typeof Playroom !== "undefined" && Playroom.myPlayer()){
     Playroom.myPlayer().setState("pos", {x: P.x, y: P.y, z: P.z, state: P.state});
+    if(t % 60 === 0) console.log("DEBUG: others.length =", others.length, "others =", others); // debug every 1 sec
     for(const o of others){
       const pos = o.getState("pos");
+      if(t % 60 === 0) console.log("DEBUG: player", o.id, "pos =", pos); // debug
       if(pos) {
         // get player index: count how many players are before this one
         const playerIndex = Playroom.getAllPlayers().findIndex(p => p.id === o.id);
