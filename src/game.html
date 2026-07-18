@@ -55,6 +55,8 @@ canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch
   border:1px solid #2f2b3d;background:rgba(15,13,22,.6);display:flex;align-items:center;justify-content:center;
   color:var(--dim);font-size:11px;pointer-events:auto;letter-spacing:.1em}
 #devHotspot{position:absolute;right:0;bottom:0;width:80px;height:80px;opacity:0;cursor:pointer}
+#devToggle{position:fixed;bottom:20px;right:20px;background:rgba(60,14,34,.9);border:1px solid var(--club);color:var(--sodium);padding:12px 16px;border-radius:4px;font-size:12px;display:none;z-index:100;cursor:pointer;font-family:'JetBrains Mono',monospace}
+#devToggle:hover{background:rgba(255,46,136,.3)}
 
 
 /* ---- pause ---- */
@@ -250,6 +252,7 @@ kbd{background:#191725;border:1px solid #2f2b3d;border-bottom-width:2px;border-r
       </div>
     </div>
     <div id="devHotspot"></div>
+    <button id="devToggle">CO-OP TEST</button>
   </div>
 </div>
 <script>
@@ -509,6 +512,7 @@ $('recapAgain').onclick=anotherRound;
 $('resume').onclick=()=>setPause(false);
 $('pauseBtn').onclick=()=>setPause(!paused);
 $('devHotspot').onclick=()=>{ if(mode==='title') startSolo(); };
+$('devToggle').onclick=()=>{ if(mode==='title') startCoop(); };
 $('d_sober').onclick=()=>P.drunk=0;
 $('d_drunk').onclick=()=>P.drunk=Math.min(100,P.drunk+40);
 $('d_cash').onclick=()=>P.money+=100;
@@ -528,7 +532,10 @@ $('shopList').addEventListener('click',e=>{ const it=e.target.closest('.item'); 
 //====================== input ======================
 const key={}, pressed={};
 addEventListener('keydown',e=>{
-  if(mode==='title'){ startSolo(); e.preventDefault(); return; }
+  if(mode==='title'){
+    if(e.code==='KeyD'){ $('devToggle').style.display=$('devToggle').style.display==='none'?'block':'none'; return; }
+    startSolo(); e.preventDefault(); return;
+  }
   if(e.code==='Escape'){setPause(!paused);return;}
   if(!key[e.code])pressed[e.code]=true; key[e.code]=true;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault(); });
