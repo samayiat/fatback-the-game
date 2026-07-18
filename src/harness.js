@@ -326,6 +326,26 @@ if(!err){
     if(g.P.hp<hp1) throw new Error('out-of-frame still ate the photo');
     console.log('        bus parked; in-frame flashed, out-of-frame safe');
   });
+  scene('bosses can only sober you twice a fight, and drink softens their hits', ()=>{
+    const g=__G(); g.clearEnts();
+    g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.state='idle';
+    g.setCamLock(Math.max(0,g.P.x-170));
+    g.spawnBoss(2,'bouncer'); const b=g.boss;                 // spawnBoss resets the per-fight sober count
+    const heavy=()=>{ g.P.drunk=100; g.P.iframes=0; g.P.state='idle'; g.hurtPlayer(10,b.x,50); };
+    heavy(); const after1=g.P.drunk;                          // #1 sobers
+    heavy();                                                  // #2 sobers
+    heavy();                                                  // #3 must NOT sober
+    if(!(after1<100)) throw new Error('the first heavy hit should sober you');
+    if(g.P.drunk!==100) throw new Error('a third heavy hit must not sober you (cap is 2), drunk='+g.P.drunk);
+    // light pokes still nibble even past the cap
+    g.P.drunk=100; g.P.iframes=0; g.P.state='idle'; g.hurtPlayer(6,b.x,10);
+    if(!(g.P.drunk<100)) throw new Error('light pokes should still trim a little drunk');
+    // alcohol dulls the pain: the same hit costs less HP when you're lit
+    g.P.drunk=0;   g.P.iframes=0; g.P.state='idle'; g.P.hp=1000; g.hurtPlayer(100,b.x,0); const soberDmg=1000-g.P.hp;
+    g.P.drunk=100; g.P.iframes=0; g.P.state='idle'; g.P.hp=1000; g.hurtPlayer(100,b.x,0); const drunkDmg=1000-g.P.hp;
+    if(!(drunkDmg<soberDmg)) throw new Error('being drunk should reduce damage taken: '+drunkDmg+' vs '+soberDmg);
+    console.log('        sober cap = 2; drunk softens the blow ('+Math.round(drunkDmg)+' vs '+Math.round(soberDmg)+' HP)');
+  });
   scene('lawyer boss: serves a subpoena fan, gavel sends a shockwave, open on recover', ()=>{
     const g=__G(); g.clearEnts();
     g.P.hp=g.P.maxhp=1e9; g.P.x=8020; g.P.z=300; g.P.y=0; g.P.vy=0; g.P.state='idle';
