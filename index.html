@@ -1396,12 +1396,12 @@ function connect(e,s){
 const GRAB_WIND=48;          // frames you hold before the toss launches (~0.8s — snappy, still a commitment)
 const EGRAB_LEN=82;          // frames an enemy holds you before hurling you into the street
 const EGRAB_ESCAPE=7;        // punch-mashes needed to break their grip
-function atCurb(){ return P.z > FLOOR_S-34 && P.y===0 && P.state!=='down' && P.state!=='caged' && P.state!=='grabbed'; }
-function grabbable(){                                       // nearest live enemy within reach of the curb
+function atCurb(){ return P.z >= FLOOR_S-8 && P.y===0 && P.state!=='down' && P.state!=='caged' && P.state!=='grabbed'; }   // right on the edge — as close to the street as you can stand
+function grabbable(){                                       // the single closest live enemy within arm's reach of the curb
   let best=null,bd=1e9;
   for(const e of ents){ if(e.dead||e.k==='boss') continue;
     if(e.state==='thrown'||e.state==='road'||e.state==='held'||e.state==='grabbing') continue;
-    if(Math.abs(e.x-P.x)<52 && Math.abs(e.z-P.z)<32){ const dd=Math.abs(e.x-P.x); if(dd<bd){ bd=dd; best=e; } } }
+    if(Math.abs(e.x-P.x)<38 && Math.abs(e.z-P.z)<24){ const dd=Math.hypot(e.x-P.x,(e.z-P.z)*1.6); if(dd<bd){ bd=dd; best=e; } } }   // true nearest, not just horizontal
   return best;
 }
 function tryGrab(){                                         // begin a grab (↓+punch, held). returns true if it started
