@@ -85,7 +85,7 @@ for i in range(6):
 for i in range(7):   # replaced the old 5-frame straight punch with a proper west-sourced haymaker
     p=f"{D}/animations/punch/west/frame_{i:03d}.png"
     if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.punch.{i}", p)
-for i in range(5):
+for i in range(7):   # replaced the subtle 5-frame flinch with a more dynamic 7-frame reaction (head snap, impact stars)
     p=f"{D}/animations/hit_reaction/west/frame_{i:03d}.png"
     if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.hit.{i}", p)
 for i in range(7):
