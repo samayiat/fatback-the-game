@@ -1010,10 +1010,19 @@ function bossRepel(b){                              // "get away from me" — hu
   b.repelCd=300;   // 5s minimum between sobering repels — no more spamming you into oblivion
 }
 
+// crawler (the spider) always opens the night. subway/deli/halal are rarer pulls after
+// that — real weighted-random per boss instead of a fixed rotation, so who shows up
+// (beyond the guaranteed opener) actually varies run to run.
+const BOSS_WEIGHT={ratking:1,bouncer:1,crawler:1,deli:0.3,subway:0.3,halal:0.3,auteur:1,tourist:1,lawyer:1};
+function pickBossArch(bn,H){
+  if(bn===1) return 'crawler';
+  let r=H(1)*Object.values(BOSS_WEIGHT).reduce((s,w)=>s+w,0);
+  for(const a of BOSS_ARCH){ const w=BOSS_WEIGHT[a]; if(r<w) return a; r-=w; }
+  return BOSS_ARCH[BOSS_ARCH.length-1];
+}
 function genBoss(bn,forceArch){
   const sd=bn*97.31+3.7, H=k=>hsh(sd+k*1.7);
-  const N=BOSS_ARCH.length;
-  const arch=forceArch||BOSS_ARCH[(bn-1+Math.floor(H(1)*N))%N];   // rotate + roll so every archetype recurs
+  const arch=forceArch||pickBossArch(bn,H);   // spider first, then weighted-random (train/deli/cart rare)
   const mul={ratking:1,bouncer:1.15,crawler:0.85,deli:1.2,subway:1.1,halal:0.95,auteur:1.0,tourist:1.05,lawyer:1.1}[arch];
   const b={ k:'boss', big:true, arch, name:BOSS_NAME[arch], pal:BOSS_PAL[arch], moves:BOSS_MOVES[arch],
     x:0,z:0,y:0,vy:0,vx:0,face:-1, state:'intro',st:0,anim:0,hitstun:0,dead:0,flash:0,tok:false,
