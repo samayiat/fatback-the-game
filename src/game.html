@@ -2097,6 +2097,16 @@ function update(){
 
     const dx=P.x-e.x, dz=P.z-e.z, d=Math.hypot(dx,dz*1.6);
     e.face=dx>0?1:-1;
+    // dark form: a ranged plasma lob on its own cooldown, independent of the melee state
+    // machine — too menacing to just be another haymaker bruiser up close.
+    if(e.plasmaCd>0) e.plasmaCd--;
+    if(e.skin==='darnell' && e.elite && IDX['shade.rot.south'] && !e.dead && e.state!=='stun' && e.state!=='launch'
+       && d>50 && d<260 && (e.plasmaCd||0)<=0){
+      e.plasmaCd=rnd(110,170); const dd=Math.max(1,d);
+      fires.push({x:e.x, z:e.z, y:34, vx:(dx/dd)*4.2, vz:(dz/dd)*2.2, vy:0, r:6, life:100, max:100,
+        foe:true, plasma:true, sober:S_LIGHT});
+      puff(e.x,e.z-30,10,6,'#ffb3ff'); blip(180,.08);
+    }
     if(e.state==='breathe'){ e.st++;
       const w=e.big?30:22;                       // wind-up you can read and walk out of
       if(e.st===1) blip(50,.05);
@@ -2199,7 +2209,7 @@ function update(){
     else if(f.weapon){ f.spin=(f.spin||0)+0.5; }         // a thrown weapon flies straight, tumbling
     else if(f.tornado){ f.spin=(f.spin||0)+0.5;          // the twister stalks your row and creeps toward you
       f.vx = (P.x<f.x?-1:1)*Math.abs(f.vx); f.z += clamp(P.z-f.z,-0.5,0.5); }
-    else if(!f.bullet && !f.clap && !f.paper && !f.shock){ f.vx*=0.965; f.r+=0.30; }   // plain fire spreads; bullets/claps/papers fly straight
+    else if(!f.bullet && !f.clap && !f.paper && !f.shock && !f.plasma){ f.vx*=0.965; f.r+=0.30; }   // plain fire spreads; bullets/claps/papers/plasma fly straight
     f.life--;
     if(f.life<0){ f.gone=true; continue; }
     if(f.foe===false){                                 // your fireball / thrown weapon — hits whoever it catches
@@ -2229,7 +2239,7 @@ function update(){
       continue;
     }
     if(Math.abs(f.x-P.x)<f.r*0.8+9 && Math.abs(f.z-P.z)<f.r*0.4+9 && P.y<26)
-      hurtPlayer(f.bullet?7:(f.clap?8:(f.r>7?9:6)), f.x, f.sober||0);
+      hurtPlayer(f.plasma?11:(f.bullet?7:(f.clap?8:(f.r>7?9:6))), f.x, f.sober||0);
   }
   fires=fires.filter(f=>!f.gone);
 
@@ -2948,6 +2958,17 @@ function drawFires(){
   for(const f of fires){ if(!f.bullet) continue; const bx=f.x-camX, by=f.z-f.y;
     ctx.fillStyle='#ffd23a'; ctx.fillRect(bx-4,by-2,8,4);      // tracer streak
     ctx.fillStyle='#fff'; ctx.fillRect(bx-1,by-1.5,3,3); }     // hot core
+  // plasma balls (the dark form's ranged lob) — a pulsing white-hot core in a magenta glow, trailing embers
+  for(const f of fires){ if(!f.plasma) continue; const bx=f.x-camX, by=f.z-f.y;
+    const pulse=0.7+0.3*Math.sin(t*0.6+f.x*0.3);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=0.55*pulse; ctx.fillStyle='#ff6aff';
+    ctx.beginPath(); ctx.ellipse(bx,by,7*pulse,7*pulse,0,0,7); ctx.fill();
+    ctx.globalAlpha=0.9; ctx.fillStyle='#ffe0ff';
+    ctx.beginPath(); ctx.ellipse(bx,by,3.2,3.2,0,0,7); ctx.fill();
+    ctx.globalAlpha=0.35; ctx.fillStyle='#ff2eea';
+    ctx.beginPath(); ctx.ellipse(bx-f.vx*1.4,by-f.vz*1.4,4,4,0,0,7); ctx.fill();   // short trailing ember
+    ctx.restore(); }
   // sizzling skewers (the cart man) — a tumbling stick of charred meat + veg
   for(const f of fires){ if(!f.skewer) continue; const bx=f.x-camX, by=f.z-f.y;
     ctx.save(); ctx.translate(bx,by); ctx.rotate(f.z*0.4+t*0.3);
@@ -3092,17 +3113,21 @@ function drawVamp(e){ const sx=e.x-camX;
   // slot vampires use for their tougher 1-in-6, reused instead of a new mechanic.
   const dark = isDarnell && e.elite && IDX['shade.rot.south'];
   const pfx = dark?'shade':(isDarnell?'darnell':'vamp');
-  const hasRealHit = dark ? IDX['shade.knockback.0'] : (isDarnell ? IDX['darnell.hit.0'] : false);   // dark form has no dedicated flinch set, reuses knockback
+  // dark form doesn't have (or need) a hit-reaction pose — it just glows white on impact,
+  // no lay-down frame, so a regular hit and actual death don't end up looking like the
+  // same "on the ground" moment twice.
+  const hasRealHit = dark ? false : (isDarnell ? IDX['darnell.hit.0'] : false);
   let key;
   if(dark){
     key='shade.rot.'+(e.face>0?'east':'west');
     // west-sourced haymaker, mirrored for east same as every other combat sheet —
     // fixed from the earlier south-only workaround now that real west frames exist.
-    if(e.state==='atk'||e.state==='launch'){
+    // ATK only — launch used to show this too, which looked like it was still punching
+    // while flying backward from a heavy hit.
+    if(e.state==='atk'){
       const fi=clamp(Math.floor(e.st/6),0,6);
       key = IDX[`shade.haymaker.${fi}`] || key;
     }
-    if(e.state==='stun') key = hasRealHit ? 'shade.knockback.'+clamp(Math.floor((15-(e.hitAnimT||0))/2),0,6) : key;
     if(e.dead) key='shade.rot.south';
   } else if(isDarnell){
     key = IDX['darnell.walk.0'] ? 'darnell.walk.'+(Math.floor(e.anim)%6) : 'darnell.rot.'+(e.face>0?'east':'west');
@@ -3124,6 +3149,15 @@ function drawVamp(e){ const sx=e.x-camX;
   // the sprite bobs a few px above it; phase offset by x so a pack of them don't sync.
   const hover = dark && !e.dead ? 6+Math.sin(t*0.045+e.x*0.15)*6 : 0;   // bigger, slower bob (0-12px) — reads clearly as floating, not just standing tall
   shadow(e.x,e.z, (e.elite?20:16)-e.y*0.05-hover*0.4);   // shrinks a bit at the peak of the bob, reinforcing height
+  // telegraph the plasma lob — a magenta glow builds at chest height for the ~1/3 second
+  // before it fires, so it's a real dodgeable threat instead of an instant surprise hit.
+  if(dark && !e.dead && e.state!=='stun' && (e.plasmaCd||999)>0 && (e.plasmaCd||999)<20){
+    const charge=1-(e.plasmaCd/20);
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=charge*0.65;
+    ctx.fillStyle='#ff6aff'; ctx.beginPath();
+    ctx.ellipse(sx,e.z-e.y-hover-22,4+charge*9,4+charge*9,0,0,7); ctx.fill();
+    ctx.restore();
+  }
   if(spin){ ctx.save(); const r=(e.dead? Math.min(1,e.dead/12)*0.95 : Math.min(1,(9.5-Math.abs(e.vx))/9.5)*0.7);
     if(e.dead) ctx.globalAlpha=Math.max(0,1-e.dead/28);
     ctx.translate(sx,e.z); ctx.rotate(-e.face*r); ctx.translate(-sx,-e.z); }
@@ -3135,12 +3169,21 @@ function drawVamp(e){ const sx=e.x-camX;
     ctx.fillStyle='#ff8c3a'; ctx.beginPath();
     ctx.ellipse(sx,e.z-e.y-hover,20,7,0,0,7); ctx.fill();
     ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; }
+  if(dark && e.flash>0){   // this IS his hit reaction — a hard white burst blooming out from the body, no pose change
+    const g=e.flash/14;
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=g*0.7;
+    ctx.fillStyle='#ffffff'; ctx.beginPath();
+    ctx.ellipse(sx,e.z-e.y-hover-14,14+g*10,20+g*14,0,0,7); ctx.fill();
+    ctx.globalAlpha=g*0.4; ctx.fillStyle='#ffd8ff';
+    ctx.beginPath(); ctx.ellipse(sx,e.z-e.y-hover-14,22+g*16,28+g*20,0,0,7); ctx.fill();
+    ctx.restore(); }
   // procedural hit recoil: on a plain (non-launch) hit, shove the sprite back and
   // lean it away from the blow for the frames right after impact, so a stun reads
   // as taking the hit instead of just standing there flashing. Skipped when a real
   // hit/knockback animation is already playing — the drawn frames sell it instead.
+  // Also skipped for the dark form entirely — it just glows, no pose or position change.
   let rx=0, rlean=0;
-  if(e.recoilT>0 && !spin && !hasRealHit){
+  if(e.recoilT>0 && !spin && !hasRealHit && !dark){
     const k=e.recoilT/9; rx=(e.recoil||1)*k*6; rlean=(e.recoil||1)*k*0.22; }
   if(rlean){ ctx.save(); ctx.translate(sx+rx,e.z); ctx.rotate(rlean); ctx.translate(-(sx+rx),-e.z); }
   spr(key, sx+rx, e.z-e.y-hover, f, et, ea, e.sc||1);

@@ -95,13 +95,11 @@ for i in range(7):
 DD="DarnellDark"
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
     add(f"shade.rot.{d}", f"{DD}/rotations/{d}.png")
-for i in range(7):
-    p=f"{DD}/animations/knockback/west/frame_{i:03d}.png"
-    if os.path.exists(os.path.join(ROOT,p)): add(f"shade.knockback.{i}", p)
 for i in range(7):   # west-sourced haymaker — fixes the earlier direction gap (old cross-punch had no west sheet)
     p=f"{DD}/animations/haymaker/west/frame_{i:03d}.png"
     if os.path.exists(os.path.join(ROOT,p)): add(f"shade.haymaker.{i}", p)
-# old south/east/north cross-punch kept on disk but no longer packed — superseded by shade.haymaker
+# old knockback + south/east/north cross-punch kept on disk but no longer packed — the dark
+# form doesn't play a hit-reaction pose anymore (just glows), so knockback is unused too
 
 K="Smoking_a_cigarette."
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
