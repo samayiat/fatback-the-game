@@ -35,14 +35,22 @@ K="Smoking_a_cigarette."
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
     add(f"smoke.rot.{d}", f"{K}/rotations/{d}.png")
 
-# the women outside the clubs — 8-way rotations each. w0..wN keyed by index.
-WOMEN=["Keisha","Marisol","Simone","Tiana","Nova","Mei","Camila","Priya"]
+# the women outside the clubs. NPCs only ever render 4 of the 8 directions
+# (drawNPC uses south, south-east, south-west when you're close, and north once
+# she's done with you) — so we pack only those, not the full rotation. Halves
+# the atlas cost per woman and matches the "flip east/west, skip the rest" idea.
+WOMEN=["Keisha","Marisol","Simone","Tiana","Nova","Mei","Camila","Priya",
+       "Glamorous","Radiant","ElegantSamoa","VibrantLatina","SleekPro"]
+NPC_DIRS=["south","south-east","south-west","north"]
 for wi,Wn in enumerate(WOMEN):
-    for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
-        add(f"w{wi}.rot.{d}", f"{Wn}/rotations/{d}.png")
+    for d in NPC_DIRS:
+        p=f"{Wn}/rotations/{d}.png"
+        if os.path.exists(os.path.join(ROOT,p)):
+            add(f"w{wi}.rot.{d}", p)
 
-# talking + laughing loops (south-facing, 6 frames) for the women who have them.
-# the crew system plays these; women without them fall back to their idle rotation.
+# mood loops (south-facing, 6 frames) for the women who have them. the crew
+# system plays talk/laugh; women without a matching loop fall back to their idle
+# rotation. keys: w{i}.talk.*, w{i}.laugh.*
 for wi,Wn in enumerate(WOMEN):
     for anim,folder in [("talk","talking"),("laugh","laughing")]:
         for fi in range(6):

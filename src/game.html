@@ -756,14 +756,15 @@ function reset(){
 }
 let best=0;
 
+const NUM_WOMEN=13;   // w0-w12: 4 original (dancing) + 4 new (talk/laugh) + 5 wired from earlier gens
 function mkNpc(x,z){
-  const who=Math.floor(Math.random()*8);
+  const who=Math.floor(Math.random()*NUM_WOMEN);
   // her crew — 0-2 companions standing beside her, chatting and laughing. purely
   // decorative (the tell/scam mechanic stays on the main woman), but it turns a
   // lone figure at the door into a group you have to read.
   const crew=[]; const nc=Math.random()<0.62?(Math.random()<0.5?1:2):0;
   const used=new Set([who]); const moods=['talk','laugh','talk'];
-  for(let i=0;i<nc;i++){ let w2,guard=0; do{ w2=Math.floor(Math.random()*8);}while(used.has(w2)&&guard++<8); used.add(w2);
+  for(let i=0;i<nc;i++){ let w2,guard=0; do{ w2=Math.floor(Math.random()*NUM_WOMEN);}while(used.has(w2)&&guard++<12); used.add(w2);
     crew.push({dx:(i===0?-1:1)*(22+Math.random()*12), who:w2, mood:moods[Math.floor(Math.random()*3)], ph:Math.random()*9}); }
   return {x,z,trueTier:Math.floor(rnd(3,11)),scammer:Math.random()<0.45, who, crew,
     talked:false,blown:false,tellPh:rnd(0,6),lie:0,lieT:0,revealed:false,listening:false,laugh:0}; }
