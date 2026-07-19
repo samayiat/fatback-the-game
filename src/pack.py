@@ -146,13 +146,19 @@ def reframe(im):
     over the 5'11 hero and their feet land below the FOOT baseline. Crop to the
     actual figure, scale it to a FIXED target height (so every woman is the same
     scale no matter her export size), and seat the feet on row FOOT so spr()
-    places them like every other sprite."""
+    places them like every other sprite.
+
+    Resize uses NEAREST, not LANCZOS: LANCZOS is built for smooth photographic
+    downscaling and blurs flat-color pixel art, and it blurs MORE at steeper
+    ratios — so a 184px source (bigger downscale) came out softer than a 136px
+    one, on top of the game's canvas already being rendered pixelated everywhere
+    else. NEAREST keeps hard edges and reads consistent across every source size."""
     a=im.getchannel("A"); bb=a.getbbox()
-    if not bb: return im.resize((S,S), Image.LANCZOS)
+    if not bb: return im.resize((S,S), Image.NEAREST)
     fig=im.crop(bb)
     f=FIG_H/fig.height                       # normalize to target height, not a fixed factor
     nw,nh=max(1,round(fig.width*f)),max(1,round(fig.height*f))
-    fig=fig.resize((nw,nh), Image.LANCZOS)
+    fig=fig.resize((nw,nh), Image.NEAREST)
     cell=Image.new("RGBA",(S,S),(0,0,0,0))
     cell.paste(fig, ((S-nw)//2, FOOT-nh), fig)   # centered, feet on the baseline
     return cell
