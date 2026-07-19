@@ -67,6 +67,23 @@ for i in range(4):
 for i in range(4):
     add(f"vamp.kick.{i}", f"{V}/animations/Hurricane_Kick/west/frame_{i:03d}.png")
 
+# second vampire variant — teal-robed, its own self-contained PixelLab character
+# (VampTeal), built on an established design rather than a broken image-upload
+# reference. Has real hit/knockback frames instead of the procedural recoil.
+V2="VampTeal"
+if os.path.isdir(os.path.join(ROOT,V2)):
+    for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
+        add(f"vamp2.rot.{d}", f"{V2}/rotations/{d}.png")
+    for i in range(6):
+        p=f"{V2}/animations/walking/west/frame_{i:03d}.png"
+        if os.path.exists(os.path.join(ROOT,p)): add(f"vamp2.walk.{i}", p)
+    for i in range(5):
+        p=f"{V2}/animations/hit_reaction/west/frame_{i:03d}.png"
+        if os.path.exists(os.path.join(ROOT,p)): add(f"vamp2.hit.{i}", p)
+    for i in range(6):
+        p=f"{V2}/animations/knockback/west/frame_{i:03d}.png"
+        if os.path.exists(os.path.join(ROOT,p)): add(f"vamp2.knockback.{i}", p)
+
 K="Smoking_a_cigarette."
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
     add(f"smoke.rot.{d}", f"{K}/rotations/{d}.png")

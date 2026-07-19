@@ -775,12 +775,21 @@ function mkNpc(x,z){
 
 // pick the right frame for a crew woman's mood, falling back to her idle rotation
 // until the talk/laugh animations are packed into the atlas.
+// women have a mix of 5-frame idle loops (subtle chat/laugh) and older 6-frame
+// gesture loops (arm waves, head-back laughs) depending on when they were made —
+// count each woman's actual frames once and cache it, rather than assume 6.
+const _moodFrameCount={};
+function moodFrames(who,mood){
+  const k=who+'.'+mood;
+  if(_moodFrameCount[k]!==undefined) return _moodFrameCount[k];
+  let n=0; while(IDX['w'+who+'.'+mood+'.'+n]) n++;
+  return _moodFrameCount[k]=n;
+}
 function womanMoodKey(who,mood,ph){
-  // these loops were built as full gesture animations (talking with hand waves,
-  // head-back laughing) — cycled at speed they read as frantic on a background
-  // crew member. slowed way down (~3x) so it's a lazy idle loop, not a puppet show.
-  if(mood==='laugh' && IDX['w'+who+'.laugh.0']) return 'w'+who+'.laugh.'+(Math.floor(t*0.04+ph)%6);
-  if(mood==='talk'  && IDX['w'+who+'.talk.0'])  return 'w'+who+'.talk.'+(Math.floor(t*0.035+ph)%6);
+  // cycled slow (~3x down from the original speed) so it reads as a lazy idle
+  // loop instead of a puppet show, whichever art generation this woman has.
+  if(mood==='laugh'){ const n=moodFrames(who,'laugh'); if(n) return 'w'+who+'.laugh.'+(Math.floor(t*0.04+ph)%n); }
+  if(mood==='talk'){  const n=moodFrames(who,'talk');  if(n) return 'w'+who+'.talk.'+(Math.floor(t*0.035+ph)%n); }
   return 'w'+who+'.rot.south';
 }
 
@@ -875,7 +884,10 @@ function rat(x,z,fromGrate,o){
 function vamp(x,z,fromDoor,forceElite){
   // every sixth guy is just built different. double health, double damage, and he knows it.
   const E = forceElite!==undefined ? forceElite : Math.random()<0.17;
-  return {k:'vamp',x,z,y:0,vy:0,vx:0, elite:E,
+  // variant 1 = the teal-robed second design (real hit/knockback sprites). Not the same
+  // palette as variant 0's dark cloak — that's fine, both clearly read as vampires.
+  const variant = IDX['vamp2.rot.south'] ? (Math.random()<0.5?1:0) : 0;
+  return {k:'vamp',x,z,y:0,vy:0,vx:0, elite:E, variant,
   hp:E?76:38, maxhp:E?76:38, dmg:E?18:9, spd:E?0.58:0.64, sc:E?1.16:1,
   flash:0,face:-1,w:E?30:26,d:E?12:10,h:74,
   state:fromDoor?'enter':'walk',st:0,anim:0,tok:false,hitstun:0,dead:0,cd:rnd(40,120),
@@ -3047,11 +3059,20 @@ function drawSammich(e){ const sx=e.x-camX, y=e.z-e.y, bob=Math.sin(e.anim*2)*1.
 
 function drawVamp(e){ const sx=e.x-camX;
   shadow(e.x,e.z, (e.elite?20:16)-e.y*0.05);
-  let key='vamp.walk.'+(Math.floor(e.anim)%4);
-  if(e.state==='atk') key='vamp.kick.'+Math.min(3,Math.floor(e.st/9));
-  if(e.state==='stun') key='vamp.rot.'+(e.face>0?'east':'west');
-  if(e.state==='launch') key='vamp.kick.1';
-  if(e.dead) key='vamp.rot.south';
+  // variant 1 = the teal-robed second design, with its own real hit/knockback
+  // frames (drawn from PixelLab, not procedural). variant 0 keeps the original
+  // dark-cloak look and the procedural shove-and-lean recoil.
+  const V2 = e.variant===1 && IDX['vamp2.rot.south'];
+  const pfx = V2?'vamp2':'vamp', walkN = V2?6:4;
+  let key=pfx+'.walk.'+(Math.floor(e.anim)%walkN);
+  if(e.state==='atk') key = V2 ? 'vamp2.rot.'+(e.face>0?'east':'west') : 'vamp.kick.'+Math.min(3,Math.floor(e.st/9));
+  if(e.state==='stun'){
+    key = (V2 && IDX['vamp2.hit.0'])
+      ? 'vamp2.hit.'+clamp(Math.floor((14-e.flash)/3),0,4)   // real hit-reaction frames, driven by the flash timer
+      : pfx+'.rot.'+(e.face>0?'east':'west');
+  }
+  if(e.state==='launch') key = V2 ? 'vamp2.rot.'+(e.face>0?'east':'west') : 'vamp.kick.1';
+  if(e.dead) key = pfx+'.rot.south';
   const f = e.face>0?-1:1;                       // this sheet is drawn facing west
   const spin = e.state==='launch'||e.dead;
   if(spin){ ctx.save(); const r=(e.dead? Math.min(1,e.dead/12)*0.95 : Math.min(1,(9.5-Math.abs(e.vx))/9.5)*0.7);
@@ -3067,9 +3088,11 @@ function drawVamp(e){ const sx=e.x-camX;
     ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; }
   // procedural hit recoil: on a plain (non-launch) hit, shove the sprite back and
   // lean it away from the blow for the frames right after impact, so a stun reads
-  // as taking the hit instead of just standing there flashing.
+  // as taking the hit instead of just standing there flashing. Skipped for the
+  // variant playing real hit-reaction frames — the drawn animation already sells it.
   let rx=0, rlean=0;
-  if(e.recoilT>0 && !spin){ const k=e.recoilT/9; rx=(e.recoil||1)*k*6; rlean=(e.recoil||1)*k*0.22; }
+  if(e.recoilT>0 && !spin && !(V2 && IDX['vamp2.hit.0'])){
+    const k=e.recoilT/9; rx=(e.recoil||1)*k*6; rlean=(e.recoil||1)*k*0.22; }
   if(rlean){ ctx.save(); ctx.translate(sx+rx,e.z); ctx.rotate(rlean); ctx.translate(-(sx+rx),-e.z); }
   spr(key, sx+rx, e.z-e.y, f, et, ea, e.sc||1);
   if(rlean) ctx.restore();
