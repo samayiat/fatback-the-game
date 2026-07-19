@@ -21,10 +21,10 @@ place the landscape lock behaves properly, so on a phone, install it.
 |---|---|---|---|
 | Move | `WASD` / arrows | Stick / D-pad | Left stick |
 | Punch | `J` | **X** (or RB / RT) | PUNCH |
-| Jump | `K` | **A** | JUMP |
+| Jump | `K` / `Space` | **A** | JUMP |
 | Drink | `L` | **B** | DRINK |
 | Talk / Eat | `E` | **Y** | TALK |
-| Pause | `Esc` | Menu | `⏸` |
+| Pause | `Esc` / `P` | Menu | `⏸` |
 
 Plug in a pad and the touch controls hide themselves. Unplug and they come back.
 

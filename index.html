@@ -546,7 +546,7 @@ addEventListener('keydown',e=>{
     if(e.code==='KeyD'){ $('devToggle').style.display=$('devToggle').style.display==='none'?'block':'none'; return; }
     startSolo(); e.preventDefault(); return;
   }
-  if(e.code==='Escape'){setPause(!paused);return;}
+  if(e.code==='Escape'||e.code==='KeyP'){setPause(!paused);return;}
   if(!key[e.code])pressed[e.code]=true; key[e.code]=true;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code))e.preventDefault(); });
 addEventListener('keyup',e=>key[e.code]=false);
@@ -1657,7 +1657,7 @@ function startDate(n){
 }
 function dateInputs(){ const pad=pollPad();
   return [ tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH)||laneTap(0),
-           tap('KeyK')||tapT('B')||(pad&&pad.JUMP) ||laneTap(1),
+           tap('KeyK')||tap('Space')||tapT('B')||(pad&&pad.JUMP) ||laneTap(1),
            tap('KeyL')||tapT('C')||(pad&&pad.DRINK)||laneTap(2) ]; }
 function dateStep(){
   const d=date; if(!d){ dateOn=false; return; }
@@ -1855,7 +1855,7 @@ function update(){
   const wantStreet = iz>0.35;          // holding DOWN, toward the road — the grab modifier
   const heldPunch = key.KeyJ || T.A || (PAD.prev&&PAD.prev.PUNCH);   // raw held state, for winding up a grab
   const jPunch=tap('KeyJ')||tapT('A')||(pad&&pad.PUNCH),
-        jJump =tap('KeyK')||tapT('B')||(pad&&pad.JUMP),
+        jJump =tap('KeyK')||tap('Space')||tapT('B')||(pad&&pad.JUMP),
         jDrink=tap('KeyL')||tapT('C')||(pad&&pad.DRINK),
         jTalk =tap('KeyE')||tapT('D')||(pad&&pad.TALK);
   if(pad&&pad.PAUSE) setPause(true);
