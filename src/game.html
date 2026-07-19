@@ -756,9 +756,25 @@ function reset(){
 }
 let best=0;
 
-function mkNpc(x,z){ return {x,z,trueTier:Math.floor(rnd(3,11)),scammer:Math.random()<0.45,
-  who:Math.floor(Math.random()*8),
-  talked:false,blown:false,tellPh:rnd(0,6),lie:0,lieT:0,revealed:false,listening:false,laugh:0}; }
+function mkNpc(x,z){
+  const who=Math.floor(Math.random()*8);
+  // her crew — 0-2 companions standing beside her, chatting and laughing. purely
+  // decorative (the tell/scam mechanic stays on the main woman), but it turns a
+  // lone figure at the door into a group you have to read.
+  const crew=[]; const nc=Math.random()<0.62?(Math.random()<0.5?1:2):0;
+  const used=new Set([who]); const moods=['talk','laugh','talk'];
+  for(let i=0;i<nc;i++){ let w2,guard=0; do{ w2=Math.floor(Math.random()*8);}while(used.has(w2)&&guard++<8); used.add(w2);
+    crew.push({dx:(i===0?-1:1)*(22+Math.random()*12), who:w2, mood:moods[Math.floor(Math.random()*3)], ph:Math.random()*9}); }
+  return {x,z,trueTier:Math.floor(rnd(3,11)),scammer:Math.random()<0.45, who, crew,
+    talked:false,blown:false,tellPh:rnd(0,6),lie:0,lieT:0,revealed:false,listening:false,laugh:0}; }
+
+// pick the right frame for a crew woman's mood, falling back to her idle rotation
+// until the talk/laugh animations are packed into the atlas.
+function womanMoodKey(who,mood,ph){
+  if(mood==='laugh' && IDX['w'+who+'.laugh.0']) return 'w'+who+'.laugh.'+(Math.floor(t*0.13+ph)%6);
+  if(mood==='talk'  && IDX['w'+who+'.talk.0'])  return 'w'+who+'.talk.'+(Math.floor(t*0.11+ph)%6);
+  return 'w'+who+'.rot.south';
+}
 
 //====================== drunk math ======================
 const critChance = ()=> 0.02+(P.drunk/100)*0.60;
@@ -3038,6 +3054,19 @@ function drawVamp(e){ const sx=e.x-camX;
   if(!e.dead && e.state!=='enter') ebar(e,e.elite?40:30,e.z-e.y-HEAD*(e.sc||1)-9,e.elite); }
 
 function drawNPC(n){ const sx=n.x-camX; shadow(n.x,n.z,14);
+  // her crew, drawn first so they sit behind her. once you blow it with her,
+  // they turn and laugh too.
+  if(n.crew) for(const c of n.crew){
+    const cx=n.x+c.dx, csx=cx-camX;
+    shadow(cx, n.z, 12);
+    const mood = n.blown ? 'laugh' : c.mood;
+    spr(womanMoodKey(c.who, mood, c.ph), csx, n.z, 1, null, 0, 0.96);
+    if(mood==='laugh' && n.blown && Math.abs(n.x-P.x)<70){
+      ctx.fillStyle='#ff2e88'; ctx.font='bold 8px "JetBrains Mono",monospace'; ctx.textAlign='center';
+      ctx.globalAlpha=0.6+0.4*Math.sin(t*0.3+c.ph);
+      ctx.fillText('ha', csx+Math.sin(t*0.3+c.ph)*3, n.z-70); ctx.globalAlpha=1;
+    }
+  }
   const app=Math.min(10,n.trueTier+goggles());
   // the woman herself — faces you when you're near, turns her back once she's done with you
   const dir = n.blown ? 'north' : (Math.abs(n.x-P.x)<130 ? (P.x<n.x?'south-west':'south-east') : 'south');

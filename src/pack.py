@@ -41,6 +41,15 @@ for wi,Wn in enumerate(WOMEN):
     for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
         add(f"w{wi}.rot.{d}", f"{Wn}/rotations/{d}.png")
 
+# talking + laughing loops (south-facing, 6 frames) for the women who have them.
+# the crew system plays these; women without them fall back to their idle rotation.
+for wi,Wn in enumerate(WOMEN):
+    for anim,folder in [("talk","talking"),("laugh","laughing")]:
+        for fi in range(6):
+            p=f"{Wn}/animations/{folder}/south/frame_{fi:03d}.png"
+            if os.path.exists(os.path.join(ROOT,p)):
+                add(f"w{wi}.{anim}.{fi}", p)
+
 # environment props (92x92)
 PROPS=["dumpster","hydrant","mailbox","sign"]
 for prop in PROPS:
