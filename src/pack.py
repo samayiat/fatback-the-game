@@ -35,8 +35,8 @@ K="Smoking_a_cigarette."
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
     add(f"smoke.rot.{d}", f"{K}/rotations/{d}.png")
 
-# the women outside the clubs — 8-way rotations each. w0..w3 keyed by index.
-WOMEN=["Keisha","Marisol","Simone","Tiana"]
+# the women outside the clubs — 8-way rotations each. w0..wN keyed by index.
+WOMEN=["Keisha","Marisol","Simone","Tiana","Nova","Mei","Camila","Priya"]
 for wi,Wn in enumerate(WOMEN):
     for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
         add(f"w{wi}.rot.{d}", f"{Wn}/rotations/{d}.png")
@@ -49,23 +49,26 @@ for prop in PROPS:
 
 FOOT=70   # matches game.html: feet sit on this row of the 92px cell
 
+FIG_H=44   # target figure height in px — just under the men's ~46, regardless of source export size
+
 def reframe(im):
-    """The women were exported at 136px with the figure filling ~80% of the
-    frame — dropped straight in they tower over the 5'11 hero and their feet
-    land below the FOOT baseline. Crop to the actual figure, scale it to the
-    hero's proportions, and seat the feet on row FOOT so spr() places them
-    like every other sprite."""
+    """The women come from PixelLab at varying export sizes (136 / 180 / 184px)
+    with the figure filling most of the frame — dropped straight in they tower
+    over the 5'11 hero and their feet land below the FOOT baseline. Crop to the
+    actual figure, scale it to a FIXED target height (so every woman is the same
+    scale no matter her export size), and seat the feet on row FOOT so spr()
+    places them like every other sprite."""
     a=im.getchannel("A"); bb=a.getbbox()
     if not bb: return im.resize((S,S), Image.LANCZOS)
     fig=im.crop(bb)
-    f=0.38                                   # 136px figure (~106px tall) -> ~40px, just under the men's 46
+    f=FIG_H/fig.height                       # normalize to target height, not a fixed factor
     nw,nh=max(1,round(fig.width*f)),max(1,round(fig.height*f))
     fig=fig.resize((nw,nh), Image.LANCZOS)
     cell=Image.new("RGBA",(S,S),(0,0,0,0))
     cell.paste(fig, ((S-nw)//2, FOOT-nh), fig)   # centered, feet on the baseline
     return cell
 
-def is_woman(key): return key[:2] in ("w0","w1","w2","w3")
+def is_woman(key): return len(key)>1 and key[0]=="w" and key[1].isdigit()
 
 n=len(entries)
 rows=(n+COLS-1)//COLS
