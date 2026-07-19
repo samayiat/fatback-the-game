@@ -1483,6 +1483,7 @@ function connect(e,s){
   // hits 1-3: LOCK. no push, no drift, no escape. the string has to land.
   e.hitstun=s.stun; e.state='stun'; e.tok=false; e.flash=s.launch?14:8;
   e.recoil=P.face; e.recoilT=s.launch?0:9;   // procedural stumble: shove the sprite back on a plain (non-launch) hit
+  e.hitAnimT=15;   // dedicated timer for hit-reaction sprite frames — flash starts at 8 OR 14 depending on hit type, so deriving frame index from it made most hits skip straight to a mid-animation pose. this always starts fresh at 0.
   if(s.push){ e.vx=P.face*s.push; e.vy=s.y; e.state='launch'; e.hitstun=s.stun; }
   hitstop = s.launch?11:(crit?7:4);
   shake=Math.max(shake, s.launch?7:(crit?5:2.2));
@@ -2023,7 +2024,7 @@ function update(){
   if(P.iframes>0)P.iframes--;
   if(P.grabImmune>0)P.grabImmune--;              // brief window where you can't be re-grabbed (no chain-grab lock)
   if(P.hitFlash>0)P.hitFlash--;
-  for(const e of ents){ if(e.flash>0) e.flash--; if(e.recoilT>0) e.recoilT--; }
+  for(const e of ents){ if(e.flash>0) e.flash--; if(e.recoilT>0) e.recoilT--; if(e.hitAnimT>0) e.hitAnimT--; }
   if(P.dmgT>0){ P.dmgT--; if(!P.dmgT)P.dmgMul=1; }
   if(P.fireT>0){ P.fireT--; if(!P.fireT) say(P.x,P.z-20,'burned out','#5c5670'); }
   if(P.scammedBy && P.drunk<28 && !P.scammedBy.revealed){ P.scammedBy.revealed=true;
@@ -3101,13 +3102,13 @@ function drawVamp(e){ const sx=e.x-camX;
       const fi=clamp(Math.floor(e.st/6),0,6);
       key = IDX[`shade.haymaker.${fi}`] || key;
     }
-    if(e.state==='stun') key = hasRealHit ? 'shade.knockback.'+clamp(Math.floor((14-e.flash)/2),0,6) : key;
+    if(e.state==='stun') key = hasRealHit ? 'shade.knockback.'+clamp(Math.floor((15-(e.hitAnimT||0))/2),0,6) : key;
     if(e.dead) key='shade.rot.south';
   } else if(isDarnell){
     key = IDX['darnell.walk.0'] ? 'darnell.walk.'+(Math.floor(e.anim)%6) : 'darnell.rot.'+(e.face>0?'east':'west');
     // one punch only — the haymaker (7 frames: big wind-up through the connect)
     if(e.state==='atk') key = IDX['darnell.punch.0'] ? 'darnell.punch.'+clamp(Math.floor(e.st/6),0,6) : key;
-    if(e.state==='stun') key = hasRealHit ? 'darnell.hit.'+clamp(Math.floor((14-e.flash)/3),0,4) : key;
+    if(e.state==='stun') key = hasRealHit ? 'darnell.hit.'+clamp(Math.floor((15-(e.hitAnimT||0))/2),0,6) : key;
     if(e.state==='launch') key = IDX['darnell.knockback.0'] ? 'darnell.knockback.'+clamp(Math.floor(e.st/3),0,6) : key;
     if(e.dead) key='darnell.rot.south';
   } else {
