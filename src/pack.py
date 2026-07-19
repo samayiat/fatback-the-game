@@ -49,7 +49,7 @@ def reframe_hero_anim(paths, hero_h=50):
 
 # folder -> hero key stem, all east-facing 6-frame
 HERO_COMBAT=[("jab_east","jab"),("cross_east","cross"),("uppercut_east","uppercut"),
-             ("knockback_east","knockback"),("flykick_east","kick")]
+             ("knockback_east","knockback"),("flykick_east","kick"),("bigswing_east","swing")]
 for folder,stem in HERO_COMBAT:
     fdir=os.path.join(ROOT,F,"animations",folder,"east")
     if os.path.isdir(fdir):

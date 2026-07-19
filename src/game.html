@@ -814,11 +814,13 @@ const COMBO=[
    sheet:'jab',      wind:[1],     hit:[2,3], back:[4,5],   step:1.8, rum:[85,.42,.72]},
   {name:'cross',    su:5, act:5, rec:11, dmg:9,  push:0,   stun:26, y:0,
    sheet:'cross',    wind:[0,1],   hit:[2,3], back:[4,5],   step:2.6, rum:[140,.68,.92]},
-  {name:'UPPERCUT', su:8, act:6, rec:18, dmg:15, push:9.5, stun:46, y:3.4, launch:true,
-   // frame 5 drops the arm into a forward-extended pose that reads as a straight punch —
-   // hold on frame 4 (fist up) through recovery instead so the uppercut finishes the way
-   // an uppercut should: fist in the air, not converting into a jab.
-   sheet:'uppercut', wind:[0,1,2], hit:[3,4], back:[4],     step:3.8, rum:[280,1,.90]},
+  {name:'SWING', su:8, act:6, rec:18, dmg:15, push:9.5, stun:46, y:3.4, launch:true,
+   // exaggerated wide haymaker/sucker-punch finisher, replacing the uppercut.
+   // frame 0 is neutral stance, 1 the big wind-up, 2-3 the swing arriving, 4 a
+   // defensive-looking mid-recover pose (skipped — reads like a different hit),
+   // 5 settles cleanly back to neutral. same lesson as the uppercut bug: don't
+   // let recovery land on a frame that reads as a weaker/different punch.
+   sheet:'swing', wind:[0,1], hit:[2,3], back:[5],     step:3.8, rum:[280,1,.90]},
 ];
 function comboKey(s){
   let a,pr;
