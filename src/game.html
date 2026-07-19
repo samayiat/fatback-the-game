@@ -25,6 +25,10 @@ html,body{width:100%;height:100%;background:#000;color:var(--bone);
 #stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
 #frame{position:relative;line-height:0}
 canvas{display:block;image-rendering:pixelated;image-rendering:crisp-edges;touch-action:none}
+/* drunk contrast/saturation lives here, not on the canvas 2D context — ctx.filter is
+   flaky-to-absent on a lot of mobile WebViews (notably iOS PWA home-screen wrappers),
+   while a CSS filter on the element itself is close to universal. */
+#c{filter:none}
 
 /* ---- touch ---- */
 #touch{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .2s}
@@ -772,8 +776,11 @@ function mkNpc(x,z){
 // pick the right frame for a crew woman's mood, falling back to her idle rotation
 // until the talk/laugh animations are packed into the atlas.
 function womanMoodKey(who,mood,ph){
-  if(mood==='laugh' && IDX['w'+who+'.laugh.0']) return 'w'+who+'.laugh.'+(Math.floor(t*0.13+ph)%6);
-  if(mood==='talk'  && IDX['w'+who+'.talk.0'])  return 'w'+who+'.talk.'+(Math.floor(t*0.11+ph)%6);
+  // these loops were built as full gesture animations (talking with hand waves,
+  // head-back laughing) — cycled at speed they read as frantic on a background
+  // crew member. slowed way down (~3x) so it's a lazy idle loop, not a puppet show.
+  if(mood==='laugh' && IDX['w'+who+'.laugh.0']) return 'w'+who+'.laugh.'+(Math.floor(t*0.04+ph)%6);
+  if(mood==='talk'  && IDX['w'+who+'.talk.0'])  return 'w'+who+'.talk.'+(Math.floor(t*0.035+ph)%6);
   return 'w'+who+'.rot.south';
 }
 
@@ -3463,8 +3470,11 @@ function composite(){
     dctx.scale(1+d2*0.09,1+d2*0.09); dctx.translate(-W/2,-H/2);
   }
 
-  // drunk cranks contrast and saturation — the world gets louder and more vivid, not washed out
-  dctx.filter = d>0 ? `saturate(${100+d*190}%) contrast(${100+d*55}%) hue-rotate(${Math.sin(t*0.006)*d2*16}deg) brightness(${100+d*18}%)` : 'none';
+  // drunk cranks contrast and saturation — the world gets louder and more vivid, not washed
+  // out. driven as a CSS filter on the canvas ELEMENT (not ctx.filter) so it actually shows
+  // up on mobile: several mobile/PWA WebViews silently ignore CanvasRenderingContext2D.filter
+  // but honor a plain CSS filter on the element close to universally.
+  disp.style.filter = d>0 ? `saturate(${100+d*190}%) contrast(${100+d*55}%) hue-rotate(${Math.sin(t*0.006)*d2*16}deg) brightness(${100+d*18}%)` : 'none';
   if(d>0.4){
     // slice warp — the floor stops being a straight line
     const strips=30, sh=H/strips, amp=(d-0.4)/0.6;
@@ -3472,7 +3482,6 @@ function composite(){
       const ox=Math.sin(t*0.036+i*0.42)*amp*11 + Math.sin(t*0.011+i*0.13)*amp*6;
       dctx.drawImage(world, 0,y,W,sh, ox, y+Math.sin(t*0.028+i*0.3)*amp*2.2, W,sh); }
   } else dctx.drawImage(world,0,0);
-  dctx.filter='none';
 
   if(d>0.01){
     // double vision, going triple at the top
