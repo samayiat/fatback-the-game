@@ -67,12 +67,41 @@ for i in range(4):
 for i in range(4):
     add(f"vamp.kick.{i}", f"{V}/animations/Hurricane_Kick/west/frame_{i:03d}.png")
 
-# second vampire variant — teal-robed, its own self-contained PixelLab character
-# (VampTeal), built on an established design rather than a broken image-upload
-# reference. Has real hit/knockback frames instead of the procedural recoil.
 # second vampire variant (VampTeal) reverted per request — back to one vampire
 # sprite only. Art stays on disk under art/VampTeal/ in case it's wanted later,
 # but it's no longer packed into the atlas or referenced by drawVamp.
+
+# Darnell — a regular street enemy alongside vampires. Normal form (darnell.*)
+# walks/punches/gets hit like any other mook; his dark/evil sibling (shade.*,
+# from the same PixelLab character group) is the "elite" roll — same slot
+# vampires use for their tougher 1-in-6 spawn, reused here instead of a new
+# mechanic. Both are 136px source, resized generically like the women/vamp art.
+D="Darnell"
+for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
+    add(f"darnell.rot.{d}", f"{D}/rotations/{d}.png")
+for i in range(6):
+    p=f"{D}/animations/walking/west/frame_{i:03d}.png"
+    if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.walk.{i}", p)
+for i in range(5):
+    p=f"{D}/animations/punch/west/frame_{i:03d}.png"
+    if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.punch.{i}", p)
+for i in range(5):
+    p=f"{D}/animations/hit_reaction/west/frame_{i:03d}.png"
+    if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.hit.{i}", p)
+for i in range(7):
+    p=f"{D}/animations/knockback/west/frame_{i:03d}.png"
+    if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.knockback.{i}", p)
+
+DD="DarnellDark"
+for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
+    add(f"shade.rot.{d}", f"{DD}/rotations/{d}.png")
+for i in range(7):
+    p=f"{DD}/animations/knockback/west/frame_{i:03d}.png"
+    if os.path.exists(os.path.join(ROOT,p)): add(f"shade.knockback.{i}", p)
+for dr in ["east","north","south"]:
+    for i in range(6):
+        p=f"{DD}/animations/cross-punch/{dr}/frame_{i:03d}.png"
+        if os.path.exists(os.path.join(ROOT,p)): add(f"shade.punch.{dr}.{i}", p)
 
 K="Smoking_a_cigarette."
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:

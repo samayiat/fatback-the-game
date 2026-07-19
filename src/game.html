@@ -888,17 +888,17 @@ function rat(x,z,fromGrate,o){
     spd: big?0.92:(fire?1.15:1.4), dmg: big?16:(fire?5:4),
     flash:0,face:-1,state:'walk',st:0,anim:0,tok:false,hitstun:0,dead:0,
     cd:rnd(20,70), enter:fromGrate?(big?54:26):0}; }
-function vamp(x,z,fromDoor,forceElite){
+function vamp(x,z,fromDoor,forceElite,skin){
+  skin = skin||'vamp';   // 'darnell' reuses this whole entity — same AI/collision/damage, different sprites
   // every sixth guy is just built different. double health, double damage, and he knows it.
+  // for Darnell, "built different" IS his dark/evil form — same roll, doubles as a skin swap.
   const E = forceElite!==undefined ? forceElite : Math.random()<0.17;
-  // second vampire variant (teal-robed, vamp2.*) reverted — back to the one
-  // original dark-cloak sprite for every vampire.
-  const variant = 0;
-  return {k:'vamp',x,z,y:0,vy:0,vx:0, elite:E, variant,
+  return {k:'vamp',x,z,y:0,vy:0,vx:0, elite:E, skin,
   hp:E?76:38, maxhp:E?76:38, dmg:E?18:9, spd:E?0.58:0.64, sc:E?1.16:1,
   flash:0,face:-1,w:E?30:26,d:E?12:10,h:74,
   state:fromDoor?'enter':'walk',st:0,anim:0,tok:false,hitstun:0,dead:0,cd:rnd(40,120),
   enterZ:z+rnd(26,60)}; }
+function darnell(x,z,fromDoor,forceElite){ return vamp(x,z,fromDoor,forceElite,'darnell'); }
 
 // sandwich monster — the deli's henchmen. small, hungry, driven by the generic enemy AI.
 function sammich(x,z){ return {k:'sammich',x,z,y:0,vy:0,vx:0,
@@ -954,7 +954,9 @@ function spawnWave(T){
     setTimeout(()=>{ if(!paused){ g.open=40; ents.push(rat(g.x+rnd(-6,6),g.z,true,{fire:Math.random()<pFire})); } }, i*200);
   }
   for(let i=0;i<nVamps;i++){ const b=pick(); if(!b) break;
-    setTimeout(()=>{ if(!paused){ b.open=60; ents.push(vamp(b.doorX+rnd(-14,14),FLOOR_N-10,true)); } }, 240+i*380);
+    setTimeout(()=>{ if(!paused){ b.open=60;
+      const spawn = (IDX['darnell.rot.south'] && Math.random()<0.35) ? darnell : vamp;   // Darnell mixed in alongside vampires
+      ents.push(spawn(b.doorX+rnd(-14,14),FLOOR_N-10,true)); } }, 240+i*380);
   }
   if(bigRat){ const g=grates.length?grates[grates.length-1]:{x:camX+W-80,z:FLOOR_S-20};
     setTimeout(()=>{ if(!paused){ g.open=90; shake=8; rumble(500,1,.6,true);
@@ -3078,21 +3080,38 @@ function drawSammich(e){ const sx=e.x-camX, y=e.z-e.y, bob=Math.sin(e.anim*2)*1.
 
 function drawVamp(e){ const sx=e.x-camX;
   shadow(e.x,e.z, (e.elite?20:16)-e.y*0.05);
-  // variant 1 = the teal-robed second design, with its own real hit/knockback
-  // frames (drawn from PixelLab, not procedural). variant 0 keeps the original
-  // dark-cloak look and the procedural shove-and-lean recoil.
-  const V2 = e.variant===1 && IDX['vamp2.rot.south'];
-  const pfx = V2?'vamp2':'vamp', walkN = V2?6:4;
-  let key=pfx+'.walk.'+(Math.floor(e.anim)%walkN);
-  if(e.state==='atk') key = V2 ? 'vamp2.rot.'+(e.face>0?'east':'west') : 'vamp.kick.'+Math.min(3,Math.floor(e.st/9));
-  if(e.state==='stun'){
-    key = (V2 && IDX['vamp2.hit.0'])
-      ? 'vamp2.hit.'+clamp(Math.floor((14-e.flash)/3),0,4)   // real hit-reaction frames, driven by the flash timer
-      : pfx+'.rot.'+(e.face>0?'east':'west');
+  const isDarnell = e.skin==='darnell';
+  // Darnell's "built different" roll doubles as his dark/evil form (shade.*) — same
+  // slot vampires use for their tougher 1-in-6, reused instead of a new mechanic.
+  const dark = isDarnell && e.elite && IDX['shade.rot.south'];
+  const pfx = dark?'shade':(isDarnell?'darnell':'vamp');
+  const hasRealHit = dark ? IDX['shade.knockback.0'] : (isDarnell ? IDX['darnell.hit.0'] : false);   // dark form has no dedicated flinch set, reuses knockback
+  let key;
+  if(dark){
+    key='shade.rot.'+(e.face>0?'east':'west');
+    // no walk cycle or west-facing punch exists for the dark form — south-sourced
+    // cross-punch frames stand in for the attack telegraph regardless of facing
+    // (avoids guessing a mirror direction we don't have art for).
+    if(e.state==='atk'||e.state==='launch'){
+      const fi=clamp(Math.floor(e.st/6),0,5);
+      key = IDX[`shade.punch.south.${fi}`] || key;
+    }
+    if(e.state==='stun') key = hasRealHit ? 'shade.knockback.'+clamp(Math.floor((14-e.flash)/2),0,6) : key;
+    if(e.dead) key='shade.rot.south';
+  } else if(isDarnell){
+    key = IDX['darnell.walk.0'] ? 'darnell.walk.'+(Math.floor(e.anim)%6) : 'darnell.rot.'+(e.face>0?'east':'west');
+    if(e.state==='atk') key = IDX['darnell.punch.0'] ? 'darnell.punch.'+clamp(Math.floor(e.st/6),0,4) : key;
+    if(e.state==='stun') key = hasRealHit ? 'darnell.hit.'+clamp(Math.floor((14-e.flash)/3),0,4) : key;
+    if(e.state==='launch') key = IDX['darnell.knockback.0'] ? 'darnell.knockback.'+clamp(Math.floor(e.st/3),0,6) : key;
+    if(e.dead) key='darnell.rot.south';
+  } else {
+    key='vamp.walk.'+(Math.floor(e.anim)%4);
+    if(e.state==='atk') key='vamp.kick.'+Math.min(3,Math.floor(e.st/9));
+    if(e.state==='stun') key='vamp.rot.'+(e.face>0?'east':'west');
+    if(e.state==='launch') key='vamp.kick.1';
+    if(e.dead) key='vamp.rot.south';
   }
-  if(e.state==='launch') key = V2 ? 'vamp2.rot.'+(e.face>0?'east':'west') : 'vamp.kick.1';
-  if(e.dead) key = pfx+'.rot.south';
-  const f = e.face>0?-1:1;                       // this sheet is drawn facing west
+  const f = e.face>0?-1:1;                       // walk/punch/knockback sheets are all west-sourced, mirrored for east
   const spin = e.state==='launch'||e.dead;
   if(spin){ ctx.save(); const r=(e.dead? Math.min(1,e.dead/12)*0.95 : Math.min(1,(9.5-Math.abs(e.vx))/9.5)*0.7);
     if(e.dead) ctx.globalAlpha=Math.max(0,1-e.dead/28);
@@ -3107,10 +3126,10 @@ function drawVamp(e){ const sx=e.x-camX;
     ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; }
   // procedural hit recoil: on a plain (non-launch) hit, shove the sprite back and
   // lean it away from the blow for the frames right after impact, so a stun reads
-  // as taking the hit instead of just standing there flashing. Skipped for the
-  // variant playing real hit-reaction frames — the drawn animation already sells it.
+  // as taking the hit instead of just standing there flashing. Skipped when a real
+  // hit/knockback animation is already playing — the drawn frames sell it instead.
   let rx=0, rlean=0;
-  if(e.recoilT>0 && !spin && !(V2 && IDX['vamp2.hit.0'])){
+  if(e.recoilT>0 && !spin && !hasRealHit){
     const k=e.recoilT/9; rx=(e.recoil||1)*k*6; rlean=(e.recoil||1)*k*0.22; }
   if(rlean){ ctx.save(); ctx.translate(sx+rx,e.z); ctx.rotate(rlean); ctx.translate(-(sx+rx),-e.z); }
   spr(key, sx+rx, e.z-e.y, f, et, ea, e.sc||1);
