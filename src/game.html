@@ -2209,17 +2209,24 @@ function respawn(){
 //====================== render ======================
 function bg(){
   const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,'#08070d'); g.addColorStop(.5,'#171325'); g.addColorStop(1,'#0e0c14');
+  g.addColorStop(0,'#0d0a1a'); g.addColorStop(.5,'#221a3a'); g.addColorStop(1,'#161022');
   ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  // a low magenta/cyan wash near the horizon — the city glow bouncing off the smog
+  const hz=ctx.createLinearGradient(0,90,0,FLOOR_N);
+  hz.addColorStop(0,'rgba(120,40,120,0)'); hz.addColorStop(.6,'rgba(150,50,110,.10)'); hz.addColorStop(1,'rgba(60,30,90,.16)');
+  ctx.fillStyle=hz; ctx.fillRect(0,90,W,FLOOR_N-90);
 
   // far skyline
-  ctx.fillStyle='#12101e';
+  const WINDOW_LIT=['#ffb545','#ff7ea8','#7dd0ff','#c9d13a','#ffd98a','#a98cff'];   // warm & cool tenement lights
+  ctx.fillStyle='#16132a';
   for(let i=-1;i<22;i++){ const bx=i*84-(camX*0.18)%84, bh=70+((i*37)%5)*20;
     ctx.fillRect(bx,146-bh,80,bh);
     for(let w=0;w<4;w++)for(let h=0;h<Math.floor(bh/18);h++){
-      const lit=hsh(i*13+w*3+h*7)<0.16;
-      ctx.fillStyle= lit?'#3a2f18':'#1a1628'; ctx.fillRect(bx+9+w*17,154-bh+h*18,5,6); }
-    ctx.fillStyle='#12101e'; }
+      const r=hsh(i*13+w*3+h*7);
+      if(r<0.34){ ctx.globalAlpha=0.55; ctx.fillStyle=WINDOW_LIT[Math.floor(hsh(i*5+w*11+h*3)*6)];
+        ctx.fillRect(bx+9+w*17,154-bh+h*18,5,6); ctx.globalAlpha=1; }
+      else { ctx.fillStyle='#1e1a34'; ctx.fillRect(bx+9+w*17,154-bh+h*18,5,6); } }
+    ctx.fillStyle='#16132a'; }
   // one blinking aircraft light, because a still sky reads as a screenshot
   ctx.globalAlpha=(t%140<12)?1:0; ctx.fillStyle='#ff4444';
   ctx.fillRect((W- (t*0.28)%(W+200))+100, 40+Math.sin(t*0.004)*6, 2,2); ctx.globalAlpha=1;
@@ -2234,10 +2241,15 @@ function bg(){
     ctx.fillStyle='#100d1c'; ctx.fillRect(sx+b.w-2,top,2,FLOOR_N-top);
     for(let w=0;w<Math.floor(b.w/28);w++){
       const h=hsh(b.x+w*31);
-      const lit = h<0.28;
+      const lit = h<0.42;
+      const col = WINDOW_LIT[Math.floor(hsh(b.x+w*17)*6)];
       // a few windows have someone moving behind the blind
-      ctx.fillStyle= lit?'#3a2f18':'#100d1c'; ctx.fillRect(sx+10+w*28,top+10,16,18);
-      if(lit && hsh(b.x+w*7)<0.4){ ctx.fillStyle='#1c1508';
+      if(lit){ ctx.globalAlpha=0.42; ctx.fillStyle=col; ctx.fillRect(sx+10+w*28,top+10,16,18); ctx.globalAlpha=1;
+        // soft glow bleeding out of the lit pane
+        ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=0.10; ctx.fillStyle=col;
+        ctx.fillRect(sx+6+w*28,top+6,24,26); ctx.globalAlpha=1; ctx.globalCompositeOperation='source-over';
+      } else { ctx.fillStyle='#100d1c'; ctx.fillRect(sx+10+w*28,top+10,16,18); }
+      if(lit && hsh(b.x+w*7)<0.4){ ctx.fillStyle='rgba(10,8,16,.7)';
         ctx.fillRect(sx+12+w*28+Math.sin(t*0.01+w)*3,top+12,5,14); } }
     // sign, pulsing on the shared BPM for clubs
     ctx.font='bold 8px "JetBrains Mono",monospace'; ctx.textAlign='center';
@@ -2313,13 +2325,22 @@ function bg(){
     ctx.fillStyle= gr.open>0?'#3a2f18':'#221e30';
     for(let i=0;i<5;i++) ctx.fillRect(sx-11+i*5,gr.z-4,3,9); }
 
-  // streetlights
+  // streetlights — brighter sodium pools, every third one a cold mercury-vapor blue for variety
+  ctx.globalCompositeOperation='lighter';
   for(let i=0;i<22;i++){ const lx=i*250-camX%250;
-    const rg=ctx.createRadialGradient(lx,FLOOR_N+40,4,lx,FLOOR_N+40,110);
-    rg.addColorStop(0,'rgba(255,181,69,.15)'); rg.addColorStop(1,'rgba(255,181,69,0)');
-    ctx.fillStyle=rg; ctx.fillRect(lx-110,FLOOR_N-40,220,160);
+    const cool=(i%3===0);
+    const warm=cool?[125,190,255]:[255,181,69];
+    const buzz=hsh(Math.floor(t/13)+i*7)<0.05?0.4:1;   // occasional flicker
+    const rg=ctx.createRadialGradient(lx,FLOOR_N+40,4,lx,FLOOR_N+40,140);
+    rg.addColorStop(0,`rgba(${warm[0]},${warm[1]},${warm[2]},${.30*buzz})`);
+    rg.addColorStop(.5,`rgba(${warm[0]},${warm[1]},${warm[2]},${.10*buzz})`);
+    rg.addColorStop(1,`rgba(${warm[0]},${warm[1]},${warm[2]},0)`);
+    ctx.fillStyle=rg; ctx.fillRect(lx-140,FLOOR_N-50,280,190);
+    ctx.globalCompositeOperation='source-over';
     ctx.fillStyle='#2b2740'; ctx.fillRect(lx-2,146,3,FLOOR_N-146);
-    ctx.fillStyle='rgba(255,181,69,.5)'; ctx.fillRect(lx-4,144,7,4); }
+    ctx.fillStyle=`rgba(${warm[0]},${warm[1]},${warm[2]},${.7*buzz})`; ctx.fillRect(lx-4,144,7,4);
+    ctx.globalCompositeOperation='lighter'; }
+  ctx.globalCompositeOperation='source-over';
 
   //---- LIGHT OUT OF THE CLUB. this is the thing the street is lit by.
   ctx.globalCompositeOperation='lighter';
@@ -3392,7 +3413,8 @@ function composite(){
     dctx.scale(1+d2*0.09,1+d2*0.09); dctx.translate(-W/2,-H/2);
   }
 
-  dctx.filter = d>0 ? `saturate(${100+d*150}%) contrast(${100-d*16}%) hue-rotate(${Math.sin(t*0.006)*d2*16}deg) brightness(${100+d2*8}%)` : 'none';
+  // drunk cranks contrast and saturation — the world gets louder and more vivid, not washed out
+  dctx.filter = d>0 ? `saturate(${100+d*190}%) contrast(${100+d*55}%) hue-rotate(${Math.sin(t*0.006)*d2*16}deg) brightness(${100+d*18}%)` : 'none';
   if(d>0.4){
     // slice warp — the floor stops being a straight line
     const strips=30, sh=H/strips, amp=(d-0.4)/0.6;
