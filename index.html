@@ -3620,6 +3620,28 @@ function composite(){
   }
   dctx.restore();
 
+  // a slow whirlpool — canvas 2D has no per-pixel shader, so this is faked with a handful
+  // of concentric rings, each clipped to its own circle and rotated a bit more than the
+  // ring outside it. Kept subtle (low alpha, additive) so it reads as the room swimming,
+  // not a kaleidoscope. Applied AFTER the room-roll restore, in plain screen space, so the
+  // ring math doesn't have to fight the roll/nod/zoom transform above.
+  if(d>0.32){
+    const amt=(d-0.32)/0.68, rings=6, maxR=Math.hypot(W,H)*0.58, cx=W/2, cy=H/2+P.lean*2;
+    dctx.save();
+    dctx.globalCompositeOperation='lighter'; dctx.globalAlpha=.16*amt;
+    for(let i=rings;i>=1;i--){
+      const r=maxR*i/rings;
+      const twist=(i/rings)*amt*0.9*Math.sin(t*0.008+i*0.5);
+      dctx.save();
+      dctx.beginPath(); dctx.arc(cx,cy,r,0,Math.PI*2); dctx.clip();
+      dctx.translate(cx,cy); dctx.rotate(twist); dctx.translate(-cx,-cy);
+      dctx.drawImage(world,0,0);
+      dctx.restore();
+    }
+    dctx.globalCompositeOperation='source-over'; dctx.globalAlpha=1;
+    dctx.restore();
+  }
+
   // tunnel closes hard at the top end — toned down across the board (was too dark even sober)
   const vg=dctx.createRadialGradient(W/2,H/2,H*(.36-d2*.14),W/2,H/2,H*(1.0-d2*.36));
   vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,`rgba(4,2,8,${.22+d2*.32})`);
