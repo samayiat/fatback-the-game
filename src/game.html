@@ -3581,40 +3581,41 @@ function composite(){
   dctx.save();
 
   // the room rolls. slow list + a faster nod, plus whatever the stumble is doing.
+  // JUICE PASS: every one of these ramps way harder now — this is the whole point of getting drunk.
   if(d>0){
-    const roll=(Math.sin(t*0.0125)*0.55+Math.sin(t*0.041)*0.2)*d2*0.30 + P.lean*0.10;
-    const nod=Math.sin(t*0.0089)*d2*7;
+    const roll=(Math.sin(t*0.0125)*0.55+Math.sin(t*0.041)*0.2)*d2*0.55 + P.lean*0.10;
+    const nod=Math.sin(t*0.0089)*d2*13;
     dctx.translate(W/2,H/2+nod); dctx.rotate(roll);
-    dctx.scale(1+d2*0.09,1+d2*0.09); dctx.translate(-W/2,-H/2);
+    dctx.scale(1+d2*0.16,1+d2*0.16); dctx.translate(-W/2,-H/2);
   }
 
   // drunk cranks contrast and saturation — the world gets louder and more vivid, not washed
   // out. driven as a CSS filter on the canvas ELEMENT (not ctx.filter) so it actually shows
   // up on mobile: several mobile/PWA WebViews silently ignore CanvasRenderingContext2D.filter
   // but honor a plain CSS filter on the element close to universally.
-  disp.style.filter = d>0 ? `saturate(${100+d*190}%) contrast(${100+d*55}%) hue-rotate(${Math.sin(t*0.006)*d2*16}deg) brightness(${100+d*18}%)` : 'none';
-  if(d>0.4){
-    // slice warp — the floor stops being a straight line
-    const strips=30, sh=H/strips, amp=(d-0.4)/0.6;
+  disp.style.filter = d>0 ? `saturate(${100+d*260}%) contrast(${100+d*85}%) hue-rotate(${Math.sin(t*0.006)*d2*26}deg) brightness(${100+d*26}%)` : 'none';
+  if(d>0.3){
+    // slice warp — the floor stops being a straight line. kicks in earlier, hits harder.
+    const strips=30, sh=H/strips, amp=(d-0.3)/0.7;
     for(let i=0;i<strips;i++){ const y=i*sh;
-      const ox=Math.sin(t*0.036+i*0.42)*amp*11 + Math.sin(t*0.011+i*0.13)*amp*6;
-      dctx.drawImage(world, 0,y,W,sh, ox, y+Math.sin(t*0.028+i*0.3)*amp*2.2, W,sh); }
+      const ox=Math.sin(t*0.036+i*0.42)*amp*17 + Math.sin(t*0.011+i*0.13)*amp*9;
+      dctx.drawImage(world, 0,y,W,sh, ox, y+Math.sin(t*0.028+i*0.3)*amp*3.4, W,sh); }
   } else dctx.drawImage(world,0,0);
 
   if(d>0.01){
-    // double vision, going triple at the top
-    const s1=Math.sin(t*.021)*d*9, s2=Math.cos(t*.013)*d*5;
+    // double vision, going triple at the top — wider ghost separation, heavier blur
+    const s1=Math.sin(t*.021)*d*15, s2=Math.cos(t*.013)*d*9;
     dctx.globalCompositeOperation='lighter';
-    dctx.filter=`blur(${d*2.6}px)`;
-    dctx.globalAlpha=.42*d; dctx.drawImage(world,s1,s2*.4);
-    dctx.globalAlpha=.34*d; dctx.drawImage(world,-s1*1.35,-s2*.35);
-    if(d>0.62){ dctx.globalAlpha=.30*(d-0.62)/0.38*2;
-      dctx.drawImage(world, Math.sin(t*0.0071)*16*d, Math.cos(t*0.0093)*9*d); }
-    // colour separation: the red ghost lags behind the blue one
-    dctx.filter=`blur(${d*1.2}px) saturate(600%) hue-rotate(-25deg)`;
-    dctx.globalAlpha=.16*d2; dctx.drawImage(world,-s1*0.6,0);
-    dctx.filter=`blur(${d*1.2}px) saturate(600%) hue-rotate(150deg)`;
-    dctx.drawImage(world,s1*0.6,0);
+    dctx.filter=`blur(${d*3.4}px)`;
+    dctx.globalAlpha=.52*d; dctx.drawImage(world,s1,s2*.4);
+    dctx.globalAlpha=.42*d; dctx.drawImage(world,-s1*1.35,-s2*.35);
+    if(d>0.62){ dctx.globalAlpha=.38*(d-0.62)/0.38*2;
+      dctx.drawImage(world, Math.sin(t*0.0071)*22*d, Math.cos(t*0.0093)*13*d); }
+    // colour separation: the red ghost lags behind the blue one — pushed further apart, more saturated
+    dctx.filter=`blur(${d*1.6}px) saturate(750%) hue-rotate(-25deg)`;
+    dctx.globalAlpha=.26*d2; dctx.drawImage(world,-s1*0.75,0);
+    dctx.filter=`blur(${d*1.6}px) saturate(750%) hue-rotate(150deg)`;
+    dctx.drawImage(world,s1*0.75,0);
     dctx.filter='none'; dctx.globalAlpha=1; dctx.globalCompositeOperation='source-over';
   }
   dctx.restore();
@@ -3623,8 +3624,8 @@ function composite(){
   const vg=dctx.createRadialGradient(W/2,H/2,H*(.36-d2*.14),W/2,H/2,H*(1.0-d2*.36));
   vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,`rgba(4,2,8,${.22+d2*.32})`);
   dctx.fillStyle=vg; dctx.fillRect(0,0,W,H);
-  // the room breathes
-  if(d>0.55){ dctx.globalAlpha=(d-0.55)/0.45*0.10*(0.5+0.5*Math.sin(t*0.05));
+  // the room breathes — starts earlier, pulses harder
+  if(d>0.4){ dctx.globalAlpha=(d-0.4)/0.6*0.18*(0.5+0.5*Math.sin(t*0.05));
     dctx.fillStyle='#3a0f2a'; dctx.fillRect(0,0,W,H); dctx.globalAlpha=1; }
 }
 
