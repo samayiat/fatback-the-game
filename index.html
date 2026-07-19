@@ -3180,8 +3180,8 @@ function drawPlayer(){
   if(P.state==='idle') key= P.drunk>60?'hero.swag.'+(Math.floor(t*.09)%8):'hero.rot.east';
   if(P.state==='jump') key='hero.jump.'+clamp(Math.floor(P.airT/4.4),0,7);
   if(P.state==='drink') key='hero.drink.'+clamp(Math.floor(P.st/6),0,5);
-  if(P.state==='air') key= IDX['hero.kick.0'] ? 'hero.kick.'+clamp(Math.floor(P.st/4),0,5)   // real flying kick
-                                              : 'hero.jump.'+clamp(4+Math.floor(P.st/5),4,7); // fallback: old jump frame
+  if(P.state==='air') key= IDX['hero.uppercut.0'] ? 'hero.uppercut.'+clamp(Math.floor(P.st/4),0,5)   // dive attack: rising uppercut
+                                                   : 'hero.jump.'+clamp(4+Math.floor(P.st/5),4,7);    // fallback: old jump frame
   if(P.state==='talk') key='hero.swag.'+(Math.floor(t*.09)%8);
   if(P.state==='down') key='hero.jump.'+(P.downT>40?5:6);
   if(P.state==='punch') key=comboKey(cStep());
