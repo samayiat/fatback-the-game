@@ -581,9 +581,11 @@ function pollPad(){
   PAD.ax=ax; PAD.az=az;
   const now={}, edge={};
   for(const k in XB){ now[k]=padDown(XB[k],gp); edge[k]= now[k] && !PAD.prev[k]; }
-  PAD.prev=now;
+  PAD.prev=now; PAD.now=now;   // hang on to the held state too (readPad only returns the edge-triggered one)
   return edge;
 }
+// true while the drink button is physically held down, on whichever input made the last press
+const heldDrink=()=> !!(key.KeyL || T.C || (PAD.now && PAD.now.DRINK));
 
 // virtual stick + buttons
 const T={ax:0,az:0, A:false,B:false,C:false,D:false, Ap:false,Bp:false,Cp:false,Dp:false};
@@ -1889,7 +1891,10 @@ function update(){
     if(P.st===24){ P.drunk=Math.min(100,P.drunk+18); P.conf=Math.min(100,P.conf+4);
       if(U.iron && P.hp<P.maxhp){ const h=U.iron*10; P.hp=Math.min(P.maxhp,P.hp+h); say(P.x,P.z-20,'+'+h,'#ffb545'); }  // IRON GUT
       say(P.x,P.z-6,'+18','#c9d13a'); blip(220,.04); rumble(300,.18,.75,true); }
-    if(P.st>=36) P.state='idle';
+    if(P.st>=36){
+      if(heldDrink() && P.bottles>0){ P.bottles--; P.st=0; }   // still holding it down → straight into the next pull
+      else P.state='idle';
+    }
   }
   else if(P.state==='down'){                   // on the pavement. nothing to do but get up.
     P.downT--; P.x+=P.knockV; P.knockV*=0.88;
