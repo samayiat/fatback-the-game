@@ -401,6 +401,8 @@ const LIQUOR={
              d:()=>`The workingman's special. Half a bottle's worth. Drunk ${Math.round(P.drunk)}.`},
   jameson:  {n:'BOTTLE OF JAMESON', cost:12, frac:1,   drink:false,
              d:()=>`Take it to go — press DRINK to pull from it. Carrying ${P.bottles}.`},
+  life:     {n:'EXTRA LIFE',        cost:750, life:true,
+             d:()=>`Guy behind the counter keeps one under the register. Currently ${lives}.`},
 };
 function renderShop(){
   $('shopCash').textContent='$'+P.money;
@@ -434,9 +436,10 @@ function buy(k){
   if(li){
     if(P.money<li.cost) return;
     P.money-=li.cost;
-    if(li.drink){ P.drunk=Math.min(100,P.drunk+18*li.frac); P.conf=Math.min(100,P.conf+6*li.frac); }
+    if(li.life){ lives++; say(P.x,P.z-30,'+1 LIFE','#ff2e88'); }
+    else if(li.drink){ P.drunk=Math.min(100,P.drunk+18*li.frac); P.conf=Math.min(100,P.conf+6*li.frac); }
     else P.bottles++;                             // a bottle to carry, drunk later on DRINK
-    blip(li.drink?680:760,.06); rumble(200,.4,.7,true); renderShop(); return;
+    blip(li.life?820:(li.drink?680:760),.06); rumble(200,li.life?.6:.4,.7,true); renderShop(); return;
   }
   if(k==='burger'){
     if(P.money<burgerCost||P.hp>=P.maxhp) return;
@@ -815,20 +818,20 @@ const COMBO=[
   {name:'cross',    su:5, act:5, rec:11, dmg:9,  push:0,   stun:26, y:0,
    sheet:'cross',    wind:[0,1],   hit:[2,3], back:[4,5],   step:2.6, rum:[140,.68,.92]},
   {name:'SWING', su:8, act:6, rec:18, dmg:15, push:9.5, stun:46, y:3.4, launch:true,
-   // exaggerated wide haymaker/sucker-punch finisher. Never touches frames 4-5
-   // (4 reads as a different defensive pose, 5 as a separate settle) — instead
-   // it's a clean ping-pong: wind up through 0,1,2, connect on 3, then reverse
-   // the exact same frames (2,1,0) back down to idle instead of continuing on
-   // to a new pose.
-   sheet:'swing', wind:[0,1,2], hit:[3], back:[2,1,0],     step:3.8, rum:[280,1,.90]},
+   // exaggerated wide haymaker/sucker-punch finisher. Wind up through 0,1,2 and
+   // connect on 3 — but recovery does NOT reverse the swing itself (that read as
+   // the whole arm windmilling forward AND back). Instead it snaps straight to
+   // the jab sheet's own recovery frames (4,5, its "back to guard" pose), same
+   // compact finish the jab combo hits already use.
+   sheet:'swing', wind:[0,1,2], hit:[3], back:[4,5], backSheet:'jab', step:3.8, rum:[280,1,.90]},
 ];
 function comboKey(s){
-  let a,pr;
+  let a,pr,sheet=s.sheet;
   if(P.st<=s.su){ a=s.wind; pr=P.st/Math.max(1,s.su); }
   else if(P.st<=s.su+s.act){ a=s.hit; pr=(P.st-s.su)/Math.max(1,s.act); }
-  else { a=s.back; pr=(P.st-s.su-s.act)/Math.max(1,s.rec); }
+  else { a=s.back; pr=(P.st-s.su-s.act)/Math.max(1,s.rec); sheet=s.backSheet||s.sheet; }  // recovery can pull from a different sheet (e.g. snap to jab's stance instead of reversing the swing)
   const idx=a[clamp(Math.floor(pr*a.length),0,a.length-1)];
-  const key='hero.'+s.sheet+'.'+idx;
+  const key='hero.'+sheet+'.'+idx;
   return IDX[key]?key:('hero.punch.'+clamp(idx,0,5));   // fall back to Cross_Punch if the new sheet isn't packed yet
 }
 const cStep=()=>COMBO[P.step];
