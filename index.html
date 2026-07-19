@@ -3113,6 +3113,9 @@ function drawVamp(e){ const sx=e.x-camX;
   }
   const f = e.face>0?-1:1;                       // walk/punch/knockback sheets are all west-sourced, mirrored for east
   const spin = e.state==='launch'||e.dead;
+  // the dark form doesn't walk — it hovers. shadow stays pinned to the ground while
+  // the sprite bobs a few px above it; phase offset by x so a pack of them don't sync.
+  const hover = dark && !e.dead ? 3+Math.sin(t*0.05+e.x*0.15)*2 : 0;
   if(spin){ ctx.save(); const r=(e.dead? Math.min(1,e.dead/12)*0.95 : Math.min(1,(9.5-Math.abs(e.vx))/9.5)*0.7);
     if(e.dead) ctx.globalAlpha=Math.max(0,1-e.dead/28);
     ctx.translate(sx,e.z); ctx.rotate(-e.face*r); ctx.translate(-sx,-e.z); }
@@ -3122,7 +3125,7 @@ function drawVamp(e){ const sx=e.x-camX;
   if(e.elite){ ctx.globalAlpha*= .999;                                 // rim glow under him
     ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=.10+.06*Math.sin(t*.07+e.x);
     ctx.fillStyle='#ff8c3a'; ctx.beginPath();
-    ctx.ellipse(sx,e.z-e.y,20,7,0,0,7); ctx.fill();
+    ctx.ellipse(sx,e.z-e.y-hover,20,7,0,0,7); ctx.fill();
     ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; }
   // procedural hit recoil: on a plain (non-launch) hit, shove the sprite back and
   // lean it away from the blow for the frames right after impact, so a stun reads
@@ -3132,11 +3135,11 @@ function drawVamp(e){ const sx=e.x-camX;
   if(e.recoilT>0 && !spin && !hasRealHit){
     const k=e.recoilT/9; rx=(e.recoil||1)*k*6; rlean=(e.recoil||1)*k*0.22; }
   if(rlean){ ctx.save(); ctx.translate(sx+rx,e.z); ctx.rotate(rlean); ctx.translate(-(sx+rx),-e.z); }
-  spr(key, sx+rx, e.z-e.y, f, et, ea, e.sc||1);
+  spr(key, sx+rx, e.z-e.y-hover, f, et, ea, e.sc||1);
   if(rlean) ctx.restore();
   if(spin) ctx.restore();
   ctx.globalAlpha=1;
-  if(!e.dead && e.state!=='enter') ebar(e,e.elite?40:30,e.z-e.y-HEAD*(e.sc||1)-9,e.elite); }
+  if(!e.dead && e.state!=='enter') ebar(e,e.elite?40:30,e.z-e.y-hover-HEAD*(e.sc||1)-9,e.elite); }
 
 function drawNPC(n){ const sx=n.x-camX; shadow(n.x,n.z,14);
   // her crew, drawn first so they sit behind her. once you blow it with her,
