@@ -23,6 +23,42 @@ for i in range(6):
 for i in range(4):
     add(f"hero.walkS.{i}", f"{F}/animations/Walking-deb204dd/south/frame_{i:03d}.png")
 
+# --- Fatback's east-facing combat anims (jab/cross/uppercut/knockback/kick) ---
+# These came from the 160px PixelLab re-import, not the 92px local export, so they
+# need a consistent reframe: one transform (derived from frame 0's body) applied to
+# EVERY frame, so the torso stays anchored and only the limbs extend. Per-frame
+# bbox centering (what the women use) would make the body jitter as the punch
+# reaches. Feet seat on row FOOT, matching the rest of the hero. Held in PREFRAMED
+# so the main pack loop uses the already-92px result instead of the raw file.
+PREFRAMED={}
+FOOT=70
+def reframe_hero_anim(paths, hero_h=50):
+    ims=[Image.open(p).convert("RGBA") for p in paths]
+    bb0=ims[0].getchannel("A").getbbox()          # frame 0 = the standing reference
+    if not bb0: return [im.resize((S,S),Image.LANCZOS) for im in ims]
+    f=hero_h/(bb0[3]-bb0[1])                       # scale so the body matches the hero
+    cx0=(bb0[0]+bb0[2])/2                          # body centre x (fixed anchor)
+    foot0=bb0[3]                                    # feet y (fixed ground line)
+    out=[]
+    for im in ims:
+        sm=im.resize((max(1,round(im.width*f)),max(1,round(im.height*f))),Image.LANCZOS)
+        cell=Image.new("RGBA",(S,S),(0,0,0,0))
+        cell.paste(sm,(round(S/2-cx0*f),round(FOOT-foot0*f)),sm)
+        out.append(cell)
+    return out
+
+# folder -> hero key stem, all east-facing 6-frame
+HERO_COMBAT=[("jab_east","jab"),("cross_east","cross"),("uppercut_east","uppercut"),
+             ("knockback_east","knockback"),("flykick_east","kick")]
+for folder,stem in HERO_COMBAT:
+    fdir=os.path.join(ROOT,F,"animations",folder,"east")
+    if os.path.isdir(fdir):
+        paths=[os.path.join(fdir,f"frame_{i:03d}.png") for i in range(6)]
+        if all(os.path.exists(p) for p in paths):
+            frames=reframe_hero_anim(paths)
+            for i,img in enumerate(frames):
+                key=f"hero.{stem}.{i}"; PREFRAMED[key]=img; add(key, paths[i])
+
 V="This_character_is_a_6_3"
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
     add(f"vamp.rot.{d}", f"{V}/rotations/{d}.png")
@@ -92,9 +128,11 @@ rows=(n+COLS-1)//COLS
 sheet=Image.new("RGBA",(COLS*S,rows*S),(0,0,0,0))
 index={}
 for i,(key,path) in enumerate(entries):
-    im=Image.open(path).convert("RGBA")
-    if is_woman(key): im=reframe(im)
-    elif im.size!=(S,S): im=im.resize((S,S), Image.NEAREST)
+    if key in PREFRAMED: im=PREFRAMED[key]           # hero combat anims, already reframed to 92px
+    else:
+        im=Image.open(path).convert("RGBA")
+        if is_woman(key): im=reframe(im)
+        elif im.size!=(S,S): im=im.resize((S,S), Image.NEAREST)
     cx,cy=(i%COLS)*S,(i//COLS)*S
     sheet.paste(im,(cx,cy))
     index[key]=[cx,cy]

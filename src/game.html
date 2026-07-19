@@ -788,22 +788,27 @@ const goggles    = ()=> P.drunk/25;
 // startup / active / recovery in ticks @60. hits 1-3 hold the enemy still (push 0).
 // the 4th sends them. every number here is meant to be tuned in the pause menu era.
 // every field here is tunable. wind/hit/back are frame indices into the named sheet.
+// four real punches now: jab, jab again, a heavier cross, then the uppercut that
+// launches. each sheet is its own 6-frame east-facing animation (0=windup … 5=recover),
+// so the combo actually looks like four different strikes instead of one recolored.
 const COMBO=[
-  {name:'jab',   su:4, act:4, rec:8,  dmg:5,  push:0,   stun:20, y:0,
-   sheet:'punch',  wind:[4],   hit:[5],   back:[0],     step:1.4, rum:[60,.30,.55]},
-  {name:'jab 2', su:3, act:4, rec:8,  dmg:5,  push:0,   stun:20, y:0,
-   sheet:'punch',  wind:[3],   hit:[5],   back:[1,0],   step:1.8, rum:[85,.42,.72]},
-  {name:'hook',  su:5, act:5, rec:11, dmg:9,  push:0,   stun:26, y:0,
-   sheet:'punchS', wind:[0,1], hit:[3,4], back:[5,2],   step:2.6, rum:[140,.68,.92]},
-  {name:'CROSS', su:8, act:6, rec:18, dmg:15, push:9.5, stun:46, y:3.4, launch:true,
-   sheet:'punch',  wind:[3,4], hit:[5],   back:[0,1,2], step:3.8, rum:[280,1,.90]},
+  {name:'jab',      su:4, act:4, rec:8,  dmg:5,  push:0,   stun:20, y:0,
+   sheet:'jab',      wind:[0,1],   hit:[2,3], back:[4,5],   step:1.4, rum:[60,.30,.55]},
+  {name:'jab 2',    su:3, act:4, rec:8,  dmg:5,  push:0,   stun:20, y:0,
+   sheet:'jab',      wind:[1],     hit:[2,3], back:[4,5],   step:1.8, rum:[85,.42,.72]},
+  {name:'cross',    su:5, act:5, rec:11, dmg:9,  push:0,   stun:26, y:0,
+   sheet:'cross',    wind:[0,1],   hit:[2,3], back:[4,5],   step:2.6, rum:[140,.68,.92]},
+  {name:'UPPERCUT', su:8, act:6, rec:18, dmg:15, push:9.5, stun:46, y:3.4, launch:true,
+   sheet:'uppercut', wind:[0,1,2], hit:[3,4], back:[5],     step:3.8, rum:[280,1,.90]},
 ];
 function comboKey(s){
   let a,pr;
   if(P.st<=s.su){ a=s.wind; pr=P.st/Math.max(1,s.su); }
   else if(P.st<=s.su+s.act){ a=s.hit; pr=(P.st-s.su)/Math.max(1,s.act); }
   else { a=s.back; pr=(P.st-s.su-s.act)/Math.max(1,s.rec); }
-  return 'hero.'+s.sheet+'.'+a[clamp(Math.floor(pr*a.length),0,a.length-1)];
+  const idx=a[clamp(Math.floor(pr*a.length),0,a.length-1)];
+  const key='hero.'+s.sheet+'.'+idx;
+  return IDX[key]?key:('hero.punch.'+clamp(idx,0,5));   // fall back to Cross_Punch if the new sheet isn't packed yet
 }
 const cStep=()=>COMBO[P.step];
 
@@ -3132,7 +3137,8 @@ function drawPlayer(){
   if(P.state==='idle') key= P.drunk>60?'hero.swag.'+(Math.floor(t*.09)%8):'hero.rot.east';
   if(P.state==='jump') key='hero.jump.'+clamp(Math.floor(P.airT/4.4),0,7);
   if(P.state==='drink') key='hero.drink.'+clamp(Math.floor(P.st/6),0,5);
-  if(P.state==='air') key='hero.jump.'+clamp(4+Math.floor(P.st/5),4,7);
+  if(P.state==='air') key= IDX['hero.kick.0'] ? 'hero.kick.'+clamp(Math.floor(P.st/4),0,5)   // real flying kick
+                                              : 'hero.jump.'+clamp(4+Math.floor(P.st/5),4,7); // fallback: old jump frame
   if(P.state==='talk') key='hero.swag.'+(Math.floor(t*.09)%8);
   if(P.state==='down') key='hero.jump.'+(P.downT>40?5:6);
   if(P.state==='punch') key=comboKey(cStep());
