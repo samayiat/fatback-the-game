@@ -42,7 +42,7 @@ for wi,Wn in enumerate(WOMEN):
         add(f"w{wi}.rot.{d}", f"{Wn}/rotations/{d}.png")
 
 # environment props (92x92)
-PROPS=["dumpster","hydrant","mailbox","sign","crate2"]
+PROPS=["dumpster","hydrant","mailbox","sign"]
 for prop in PROPS:
     if os.path.exists(os.path.join(ROOT,f"props/{prop}.png")):
         add(f"prop.{prop}", f"props/{prop}.png")
