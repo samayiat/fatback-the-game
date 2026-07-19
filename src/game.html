@@ -3619,9 +3619,9 @@ function composite(){
   }
   dctx.restore();
 
-  // tunnel closes hard at the top end
-  const vg=dctx.createRadialGradient(W/2,H/2,H*(.30-d2*.16),W/2,H/2,H*(.92-d2*.44));
-  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,`rgba(4,2,8,${.45+d2*.5})`);
+  // tunnel closes hard at the top end — toned down across the board (was too dark even sober)
+  const vg=dctx.createRadialGradient(W/2,H/2,H*(.36-d2*.14),W/2,H/2,H*(1.0-d2*.36));
+  vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,`rgba(4,2,8,${.22+d2*.32})`);
   dctx.fillStyle=vg; dctx.fillRect(0,0,W,H);
   // the room breathes
   if(d>0.55){ dctx.globalAlpha=(d-0.55)/0.45*0.10*(0.5+0.5*Math.sin(t*0.05));
