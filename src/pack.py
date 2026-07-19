@@ -82,7 +82,7 @@ for d in ["south","south-east","east","north-east","north","north-west","west","
 for i in range(6):
     p=f"{D}/animations/walking/west/frame_{i:03d}.png"
     if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.walk.{i}", p)
-for i in range(5):
+for i in range(7):   # replaced the old 5-frame straight punch with a proper west-sourced haymaker
     p=f"{D}/animations/punch/west/frame_{i:03d}.png"
     if os.path.exists(os.path.join(ROOT,p)): add(f"darnell.punch.{i}", p)
 for i in range(5):
@@ -98,10 +98,10 @@ for d in ["south","south-east","east","north-east","north","north-west","west","
 for i in range(7):
     p=f"{DD}/animations/knockback/west/frame_{i:03d}.png"
     if os.path.exists(os.path.join(ROOT,p)): add(f"shade.knockback.{i}", p)
-for dr in ["east","north","south"]:
-    for i in range(6):
-        p=f"{DD}/animations/cross-punch/{dr}/frame_{i:03d}.png"
-        if os.path.exists(os.path.join(ROOT,p)): add(f"shade.punch.{dr}.{i}", p)
+for i in range(7):   # west-sourced haymaker — fixes the earlier direction gap (old cross-punch had no west sheet)
+    p=f"{DD}/animations/haymaker/west/frame_{i:03d}.png"
+    if os.path.exists(os.path.join(ROOT,p)): add(f"shade.haymaker.{i}", p)
+# old south/east/north cross-punch kept on disk but no longer packed — superseded by shade.haymaker
 
 K="Smoking_a_cigarette."
 for d in ["south","south-east","east","north-east","north","north-west","west","south-west"]:
