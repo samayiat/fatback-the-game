@@ -886,9 +886,9 @@ function rat(x,z,fromGrate,o){
 function vamp(x,z,fromDoor,forceElite){
   // every sixth guy is just built different. double health, double damage, and he knows it.
   const E = forceElite!==undefined ? forceElite : Math.random()<0.17;
-  // variant 1 = the teal-robed second design (real hit/knockback sprites). Not the same
-  // palette as variant 0's dark cloak — that's fine, both clearly read as vampires.
-  const variant = IDX['vamp2.rot.south'] ? (Math.random()<0.5?1:0) : 0;
+  // second vampire variant (teal-robed, vamp2.*) reverted — back to the one
+  // original dark-cloak sprite for every vampire.
+  const variant = 0;
   return {k:'vamp',x,z,y:0,vy:0,vx:0, elite:E, variant,
   hp:E?76:38, maxhp:E?76:38, dmg:E?18:9, spd:E?0.58:0.64, sc:E?1.16:1,
   flash:0,face:-1,w:E?30:26,d:E?12:10,h:74,
