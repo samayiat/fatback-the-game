@@ -1438,6 +1438,7 @@ function connect(e,s){
   }
   // hits 1-3: LOCK. no push, no drift, no escape. the string has to land.
   e.hitstun=s.stun; e.state='stun'; e.tok=false; e.flash=s.launch?14:8;
+  e.recoil=P.face; e.recoilT=s.launch?0:9;   // procedural stumble: shove the sprite back on a plain (non-launch) hit
   if(s.push){ e.vx=P.face*s.push; e.vy=s.y; e.state='launch'; e.hitstun=s.stun; }
   hitstop = s.launch?11:(crit?7:4);
   shake=Math.max(shake, s.launch?7:(crit?5:2.2));
@@ -1975,7 +1976,7 @@ function update(){
   if(P.iframes>0)P.iframes--;
   if(P.grabImmune>0)P.grabImmune--;              // brief window where you can't be re-grabbed (no chain-grab lock)
   if(P.hitFlash>0)P.hitFlash--;
-  for(const e of ents) if(e.flash>0) e.flash--;
+  for(const e of ents){ if(e.flash>0) e.flash--; if(e.recoilT>0) e.recoilT--; }
   if(P.dmgT>0){ P.dmgT--; if(!P.dmgT)P.dmgMul=1; }
   if(P.fireT>0){ P.fireT--; if(!P.fireT) say(P.x,P.z-20,'burned out','#5c5670'); }
   if(P.scammedBy && P.drunk<28 && !P.scammedBy.revealed){ P.scammedBy.revealed=true;
@@ -3054,7 +3055,14 @@ function drawVamp(e){ const sx=e.x-camX;
     ctx.fillStyle='#ff8c3a'; ctx.beginPath();
     ctx.ellipse(sx,e.z-e.y,20,7,0,0,7); ctx.fill();
     ctx.globalCompositeOperation='source-over'; ctx.globalAlpha=1; }
-  spr(key, sx, e.z-e.y, f, et, ea, e.sc||1);
+  // procedural hit recoil: on a plain (non-launch) hit, shove the sprite back and
+  // lean it away from the blow for the frames right after impact, so a stun reads
+  // as taking the hit instead of just standing there flashing.
+  let rx=0, rlean=0;
+  if(e.recoilT>0 && !spin){ const k=e.recoilT/9; rx=(e.recoil||1)*k*6; rlean=(e.recoil||1)*k*0.22; }
+  if(rlean){ ctx.save(); ctx.translate(sx+rx,e.z); ctx.rotate(rlean); ctx.translate(-(sx+rx),-e.z); }
+  spr(key, sx+rx, e.z-e.y, f, et, ea, e.sc||1);
+  if(rlean) ctx.restore();
   if(spin) ctx.restore();
   ctx.globalAlpha=1;
   if(!e.dead && e.state!=='enter') ebar(e,e.elite?40:30,e.z-e.y-HEAD*(e.sc||1)-9,e.elite); }
