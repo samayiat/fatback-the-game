@@ -116,27 +116,57 @@ several builds.
 East-facing frames are mirrored in-engine for west. The atlas mirrors each cell *in
 place*, so the flipped sheet uses identical coordinates.
 
+### Sprite directions — how many to actually generate
+
+**Do not generate 8 directions for a sprite that doesn't move in 8 directions.** Every
+direction is a separate PixelLab generation; on the standing NPCs it was pure waste.
+What the engine actually renders:
+
+| sprite kind | directions the engine uses | generate |
+|---|---|---|
+| **Player / walking enemies** | east/west movement (flipped), plus south/north for facing | **`east`, `south`, `north`** — mirror east→west in-engine. 3 gens, not 8. |
+| **Standing NPCs (the women)** | `south` (facing you), `south-east`/`south-west` when you're close, `north` once she's done with you | **`south`, `south-east`, `north`** — mirror south-east→south-west. Skip east/west/north-east/north-west entirely. |
+| **Attack / reaction anims** | whatever facing the action reads in | usually just **`south`** or **`east`** (mirrored), one direction |
+
+Rules of thumb:
+- **Mirroring is free.** The atlas mirrors each cell in place (same coords, flipped
+  sheet), so any east-facing frame gives you west for zero cost. Never generate `west`.
+- **`pack.py` only packs the directions it's told to.** `NPC_DIRS` lists the 4 the
+  women use; add a direction there only if `drawNPC` (or the relevant draw fn) actually
+  references it.
+- **Prefer `standard` mode at `n_directions=4` for standing NPCs.** `v3` *always* emits
+  8 directions (3–4 generations each) whether you want them or not — reserve it for the
+  hero/enemies where the extra quality earns its cost.
+- **Always spell out clothing including shoes** in the character prompt. PixelLab will
+  otherwise leave a sprite half-dressed.
+
 ### What's still missing
 
-The player has exactly **one** attack animation (`Cross_Punch`, 6 frames, contact on
-frame 5). The 4-hit combo currently fakes variety through timing, step distance, frame
-subsets, and by borrowing the south-facing punch for the hook. It works, but four
-punches are still four punches.
+The player's combo still leans on **one** built-in attack animation (`Cross_Punch`, 6
+frames, contact on frame 5) plus the south-facing punch for the hook. Four of Fatback's
+real fighting animations **have been generated and are in the repo** but are **not yet
+wired into the engine** (see below).
 
-Generate at the same 92×92 and the same baseline:
+| animation | status |
+|---|---|
+| **Knockdown / fall** | ✅ generated — `art/This_character_is_5_11_._He/animations/knockdown/south/` (6f). Not wired; the down state still fakes it with a rotated jump frame. |
+| **Hit stagger** | ✅ generated — `.../animations/hit_stagger/south/` (6f). Not wired; there's still no hit reaction. |
+| **Jab** | ✅ generated — `.../animations/jab/south/` (6f). Not wired. |
+| **Finger guns** (flirt/taunt) | ✅ generated — `.../animations/finger_guns/south/` (6f). Not wired. |
+| Uppercut / Kick / Bottle smash | ❌ not generated yet |
 
-| animation | frames | why |
-|---|---|---|
-| **Knockdown / fall** | 6 | highest priority — currently faked with a rotated jump frame |
-| **Hit stagger** | 4 | there is no hit reaction at all right now |
-| Jab | 4 | so hits 1–2 aren't the cross |
-| Uppercut | 6 | a real combo finisher |
-| Kick | 6 | |
-| Bottle smash | 6 | the broken-bottle throwable that doesn't exist yet |
+**Wiring caveat:** these four came from the PixelLab re-import of Fatback
+(`6e4391e0…`, built v3-from-reference off his own `south.png`) and are **south-facing,
+160×160**. Combat is side-on, so `jab` wants an `east`-facing version before it fits the
+combo; `knockdown` and `hit_stagger` read fine south-facing (a falling/recoiling body
+has no strong facing) but still need the 160→92 reframe (crop to figure, seat feet on
+row 70) that `pack.py`'s `reframe()` does for the women.
 
-Also missing entirely: **a woman sprite.** The NPCs are magenta placeholder boxes. The
-tell system needs two 4-frame loops — *on phone* (scammer) and *watching the fight*
-(legit) — because the read is the mechanic, and right now it's rectangles.
+**Women:** done. 13 NPC women are wired (`w0`–`w12`) — 4 originals (dancing), 4 new
+(Nova/Mei/Camila/Priya, talk + laugh), and 5 pulled from earlier generations
+(Glamorous/Radiant/Elegant-Samoa/Vibrant-Latina/Sleek-Pro). They spawn in **groups**:
+each woman at a door gets 0–2 companions playing talk/laugh loops, and the whole crew
+turns to laugh at you when you blow it with the target.
 
 The big rat is drawn procedurally from rectangles. It reads fine, but it's not art.
 
