@@ -32,7 +32,7 @@ for i in range(4):
 # so the main pack loop uses the already-92px result instead of the raw file.
 PREFRAMED={}
 FOOT=70
-def reframe_hero_anim(paths, hero_h=50):
+def reframe_hero_anim(paths, hero_h=46):   # measured off the real walk/rotation sprites — was 50, ~9% too tall, made punches jarring next to idle/walk
     ims=[Image.open(p).convert("RGBA") for p in paths]
     bb0=ims[0].getchannel("A").getbbox()          # frame 0 = the standing reference
     if not bb0: return [im.resize((S,S),Image.LANCZOS) for im in ims]
